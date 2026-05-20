@@ -1,0 +1,20 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local runtime state
+/data/*
+!/data/.gitkeep
+
+# Local scratch files
+.tmp-dashboard.js
+
+# Logs and generated reports
+*.log
+*.sqlite
+*.db

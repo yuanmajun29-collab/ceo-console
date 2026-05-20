@@ -1,0 +1,1323 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>重庆泛智电子 · 项目工作台</title>
+  <style>
+    :root {
+      --nav:#061a2f; --nav2:#082644; --blue:#0b67f0; --bg:#f4f7fb; --panel:#fff;
+      --line:#dfe6ef; --line2:#edf1f6; --text:#101827; --muted:#697386; --green:#16a34a;
+      --red:#e11d48; --orange:#f97316; --soft-blue:#eef6ff; --soft-red:#fff1f2;
+      --soft-orange:#fff7ed; --soft-green:#ecfdf5; --shadow:0 8px 24px rgba(15,23,42,.06);
+      --side-w:200px; --detail-w:360px; --top-h:62px; --gap:14px;
+      --pad:14px; --pad-sm:10px; --inner-gap:10px; --head-h:48px;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
+    button,input,select,textarea { font:inherit; }
+    button { cursor:pointer; }
+    .app { display:grid; grid-template-columns:var(--side-w) minmax(0,1fr); min-height:100vh; }
+    .sidebar { position:sticky; top:0; height:100vh; background:linear-gradient(180deg,var(--nav),#031221); color:#dbeafe; display:flex; flex-direction:column; border-right:1px solid #0b2a47; }
+    .brand { height:64px; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid rgba(255,255,255,.08); }
+    .brand-mark { width:34px; height:34px; border-radius:6px; background:#fff; color:#09233f; display:grid; place-items:center; font-weight:900; letter-spacing:.02em; }
+    .brand-title { font-size:14px; font-weight:800; color:#fff; }
+    .brand-sub { font-size:8px; letter-spacing:.08em; color:#93c5fd; transform:scale(.92); transform-origin:left; }
+    .nav { padding:14px 10px; display:grid; gap:6px; }
+    .nav-item { height:40px; border-radius:8px; display:flex; align-items:center; gap:11px; padding:0 12px; color:#dbeafe; text-decoration:none; font-size:13px; position:relative; }
+    .nav-item:hover, .nav-item.active { background:#0b63e5; color:#fff; }
+    .nav-ico { width:16px; text-align:center; opacity:.95; }
+    .badge { margin-left:auto; min-width:20px; height:20px; padding:0 6px; border-radius:999px; background:#ef233c; color:#fff; display:grid; place-items:center; font-size:11px; font-weight:700; }
+    .sidebar-foot { margin-top:auto; padding:12px 16px; border-top:1px solid rgba(255,255,255,.08); display:flex; justify-content:space-between; font-size:12px; color:#c7d2fe; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--green); display:inline-block; margin-right:6px; }
+    .main { min-width:0; }
+    .topbar { height:var(--top-h); background:rgba(255,255,255,.96); backdrop-filter:saturate(1.4) blur(10px); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:18px; padding:0 24px; position:sticky; top:0; z-index:20; box-shadow:0 1px 8px rgba(15,23,42,.04); }
+    .hamburger { border:0; background:transparent; font-size:22px; padding:6px 8px; }
+    .title { font-size:18px; font-weight:900; white-space:nowrap; }
+    .top-spacer { flex:1; }
+    .top-meta { display:flex; align-items:center; gap:14px; color:#374151; font-size:12px; white-space:nowrap; }
+    .ok { color:var(--green); font-weight:700; }
+    .refresh { border:0; background:#fff; color:var(--blue); display:flex; align-items:center; gap:6px; }
+    .avatar { width:28px; height:28px; border-radius:50%; background:#dbeafe; color:#1d4ed8; display:grid; place-items:center; font-weight:800; }
+    .content { padding:16px 18px 32px; }
+    .workspace { display:grid; grid-template-columns:minmax(0,1fr) minmax(360px,420px); gap:var(--gap); align-items:start; }
+    .left { min-width:0; display:grid; gap:var(--gap); }
+    .right-stack { min-width:0; display:grid; gap:var(--gap); align-content:start; }
+    .left > .kpis { order:1; }
+    .left > #risks { order:2; }
+    .left > #taskCenterSection { order:3; }
+    .left > #detail { order:4; }
+    .left > #analytics { order:5; }
+    .left > .midrow { order:6; }
+    .left > .report-settings-grid { order:7; }
+    .kpis { display:grid; grid-template-columns:repeat(7,minmax(148px,1fr)); gap:var(--gap); overflow-x:auto; padding-bottom:2px; }
+    .kpi { min-height:68px; background:#fff; border:1px solid var(--line); border-radius:7px; padding:var(--pad-sm) 12px; display:grid; grid-template-columns:minmax(0,1fr) 24px; gap:6px 8px; box-shadow:var(--shadow); align-items:start; }
+    .kpi-label { color:#64748b; font-size:12px; line-height:1.2; }
+    .kpi-value { font-size:22px; line-height:1; margin-top:4px; font-weight:900; letter-spacing:0; }
+    .kpi-value small { font-size:11px !important; color:#64748b; font-weight:800; }
+    .kpi-foot { grid-column:1 / -1; color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .kpi-icon { align-self:start; justify-self:end; width:24px; height:24px; border-radius:6px; display:grid; place-items:center; font-size:13px; color:#fff; opacity:.9; }
+    .ico-blue { background:#2563eb; } .ico-green { background:#16a34a; } .ico-orange { background:#f97316; } .ico-red { background:#ef4444; }
+    .panel { background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); overflow:hidden; }
+    .panel,.kpis,.detail,.ops-grid,.report-settings-grid,.analytics-grid,.repo-grid,.right-stack { scroll-margin-top:calc(var(--top-h) + 12px); }
+    .panel-head { min-height:var(--head-h); padding:0 var(--pad); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:var(--inner-gap); flex-wrap:wrap; }
+    .panel-title { font-weight:900; }
+    .project-head { min-height:0; padding:var(--pad); border-bottom:1px solid var(--line); display:grid; gap:var(--inner-gap); }
+    .project-head-top { display:flex; align-items:center; gap:var(--inner-gap); }
+    .project-tools { display:grid; grid-template-columns:minmax(120px,1fr) minmax(120px,1fr) auto auto auto; gap:var(--inner-gap); align-items:center; }
+    .project-name { display:grid; gap:3px; }
+    .project-name b { font-size:12px; }
+    .project-path { max-width:160px; overflow:hidden; text-overflow:ellipsis; color:#64748b; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; }
+    .project-phase { display:grid; gap:5px; min-width:118px; }
+    .project-phase-top { display:flex; justify-content:space-between; gap:8px; color:#374151; }
+    .project-actions { display:flex; justify-content:flex-end; gap:6px; }
+    .project-table-wrap { overflow:auto; max-height:360px; }
+    .project-table-wrap th,.project-table-wrap td { padding:7px 10px; line-height:1.2; vertical-align:middle; }
+    .project-table-wrap .project-name { gap:1px; }
+    .project-table-wrap .project-name b { font-size:12px; line-height:1.15; }
+    .project-table-wrap .project-path { max-width:180px; font-size:10px; line-height:1.2; }
+    .project-table-wrap .task-meta { gap:4px; flex-wrap:nowrap; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:190px; }
+    .project-assets { display:flex; align-items:center; gap:4px; flex-wrap:nowrap; white-space:nowrap; overflow:hidden; max-width:190px; }
+    .project-assets .pill { flex:0 0 auto; }
+    .project-table-wrap .pill { padding:1px 5px; font-size:11px; line-height:1.2; }
+    .project-table-wrap .project-phase { gap:3px; min-width:104px; }
+    .project-table-wrap .progress { height:4px; width:54px; }
+    .project-table-wrap .progress-num { min-width:28px; font-size:10px; }
+    .project-table-wrap .project-actions { gap:4px; }
+    .project-table-wrap .project-actions button { height:22px; padding:0 7px; font-size:11px; }
+    .repo-actions { display:flex; gap:6px; flex-wrap:wrap; }
+    .repo-actions button { height:26px; padding:0 8px; border:1px solid var(--line); border-radius:4px; background:#fff; color:#374151; font-size:12px; }
+    .repo-actions button.primary-mini { border-color:#bfdbfe; background:#eff6ff; color:#1d4ed8; }
+    .repo-ops { padding:var(--pad); display:grid; grid-template-columns:1.2fr .8fr; gap:var(--inner-gap); border-bottom:1px solid var(--line); background:#fbfdff; }
+    .repo-focus,.repo-next { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:grid; gap:var(--inner-gap); min-height:128px; }
+    .repo-focus h4,.repo-next h4 { margin:0; font-size:13px; }
+    .repo-focus-title { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .repo-focus-title b { font-size:18px; }
+    .repo-path-line { color:#64748b; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .repo-mini-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+    .repo-mini { border:1px solid var(--line2); border-radius:6px; padding:8px; background:#fbfdff; }
+    .repo-mini b { display:block; font-size:18px; line-height:1; margin-bottom:4px; }
+    .repo-mini span { color:#64748b; font-size:12px; }
+    .repo-table-wrap { overflow:auto; max-height:420px; }
+    .repo-table-wrap th,.repo-table-wrap td { padding:8px 12px; line-height:1.25; vertical-align:middle; }
+    .repo-table-wrap .project-name { gap:1px; }
+    .repo-table-wrap .project-name b { font-size:12px; line-height:1.2; }
+    .repo-table-wrap .project-path { max-width:220px; font-size:10px; line-height:1.25; }
+    .repo-table-wrap .pill { padding:1px 6px; font-size:11px; }
+    .repo-table-wrap .repo-actions { gap:4px; flex-wrap:nowrap; }
+    .repo-table-wrap .repo-actions button { height:22px; padding:0 6px; font-size:11px; }
+    .right-stack .panel { overflow:visible; }
+    .right-stack .panel-head { padding:0 12px; gap:8px; }
+    .right-stack .panel-link { margin-left:0; }
+    .right-stack .tools-summary,.right-stack .settings-summary { grid-template-columns:1fr; }
+    .right-stack .metric-strip { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .right-stack .settings-form,.right-stack .repo-ops { grid-template-columns:1fr; }
+    .right-stack .settings-form .button-row { grid-column:1; }
+    .right-stack .acp-tools { grid-template-columns:1fr; }
+    .right-stack .repo-table-wrap { max-height:360px; }
+    .right-stack .repo-focus,.right-stack .repo-next { min-height:0; }
+    .right-stack .repo-focus-title b { font-size:15px; }
+    .right-stack .repo-table-wrap .project-path { max-width:180px; }
+    .tabs { display:flex; gap:18px; font-size:12px; color:#4b5563; }
+    .tab.active { color:#1d4ed8; border-bottom:2px solid #1d4ed8; padding-bottom:10px; }
+    .panel-link { margin-left:auto; border:0; background:#fff; color:#4b5563; font-size:12px; }
+    .risk-grid { display:grid; grid-template-columns:repeat(4,1fr); }
+    .risk-card { min-height:88px; padding:var(--pad); border-right:1px solid var(--line2); }
+    .risk-card:last-child { border-right:none; }
+    .risk-top { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-weight:800; font-size:13px; }
+    .risk-badge { border-radius:5px; padding:3px 8px; font-size:12px; }
+    .high { background:var(--soft-red); color:var(--red); border:1px solid #fecdd3; }
+    .midrisk { background:var(--soft-orange); color:#ea580c; border:1px solid #fed7aa; }
+    .low { background:var(--soft-green); color:var(--green); border:1px solid #bbf7d0; }
+    .risk-meta { display:grid; grid-template-columns:1fr 1fr 80px; gap:8px; color:#6b7280; font-size:12px; }
+    .midrow { display:grid; grid-template-columns:1fr; gap:var(--gap); align-items:start; }
+    .midcol { display:grid; gap:var(--gap); align-content:start; }
+    table { width:100%; border-collapse:collapse; }
+    th,td { padding:13px 16px; border-bottom:1px solid var(--line2); text-align:left; font-size:12px; white-space:nowrap; }
+    th { color:#6b7280; font-weight:700; background:#fbfdff; }
+    tr:last-child td { border-bottom:none; }
+    tr.sel { background:#eff6ff; }
+    .progress-pair { display:inline-flex; align-items:center; gap:6px; vertical-align:middle; }
+    .progress { height:5px; border-radius:999px; background:#dbeafe; overflow:hidden; width:70px; display:inline-block; vertical-align:middle; }
+    .progress span { display:block; height:100%; background:#1769f8; }
+    .progress-num { min-width:34px; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; color:#4b5563; text-align:right; }
+    .quota-cell { min-width:120px; display:grid; gap:4px; }
+    .quota-top { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12px; }
+    .quota-src { color:#94a3b8; font-size:11px; }
+    .quota-bar { height:5px; border-radius:999px; background:#e2e8f0; overflow:hidden; }
+    .quota-bar span { display:block; height:100%; background:#16a34a; }
+    .quota-bar.warn span { background:#f97316; }
+    .quota-bar.danger span { background:#e11d48; }
+    .recharge-link { width:max-content; border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:4px; padding:2px 7px; font-size:12px; text-decoration:none; }
+    .tools-summary { padding:var(--pad); display:grid; grid-template-columns:repeat(3,1fr); gap:var(--inner-gap); border-bottom:1px solid var(--line); background:#fbfdff; }
+    .tools-summary-item { border:1px solid var(--line2); border-radius:7px; background:#fff; padding:var(--pad-sm); display:grid; gap:4px; min-height:58px; }
+    .tools-summary-item b { font-size:18px; line-height:1; }
+    .tools-summary-item span { color:#64748b; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #toolsSection { position:relative; overflow:visible; }
+    .tools-details { border-top:0; position:relative; }
+    .tools-details summary { list-style:none; cursor:pointer; padding:11px 16px; display:flex; align-items:center; justify-content:space-between; color:#334155; font-weight:900; font-size:13px; border-bottom:1px solid var(--line); background:#fff; }
+    .tools-details summary::-webkit-details-marker { display:none; }
+    .tools-details summary::after { content:"展开详情"; color:#2563eb; font-size:12px; font-weight:800; }
+    .tools-details[open] summary::after { content:"收起详情"; }
+    .tools-details-body { display:none; position:absolute; left:0; right:0; top:100%; z-index:35; max-height:min(560px,62vh); overflow:auto; background:#fff; border:1px solid var(--line); border-radius:0 0 8px 8px; box-shadow:0 18px 48px rgba(15,23,42,.18); }
+    .tools-details[open] .tools-details-body { display:block; }
+    .pill { padding:2px 7px; border-radius:4px; border:1px solid var(--line); font-size:12px; display:inline-flex; align-items:center; gap:4px; }
+    .p-red { color:var(--red); background:var(--soft-red); border-color:#fecdd3; }
+    .p-orange { color:#ea580c; background:var(--soft-orange); border-color:#fed7aa; }
+    .p-green { color:var(--green); background:var(--soft-green); border-color:#bbf7d0; }
+    .task.rework { border-color:#fecdd3; background:#fff7f7; }
+    .task-failure { margin-top:8px; padding:7px 8px; border:1px solid #fecdd3; background:#fff1f2; color:#991b1b; border-radius:4px; font-size:12px; line-height:1.45; display:grid; gap:3px; }
+    .task-failure b { font-size:12px; }
+    .hint-box.alert { border-color:#fecdd3; background:#fff1f2; color:#991b1b; }
+    .blue-tag { color:#1d4ed8; background:#dbeafe; border-color:#bfdbfe; }
+    .service-dot { color:var(--green); font-weight:900; margin-right:5px; }
+    .quick { padding:var(--pad); display:grid; grid-template-columns:repeat(2,minmax(150px,1fr)); gap:var(--inner-gap); align-items:end; }
+    .quick .field:nth-child(9), .quick .field:nth-child(10), .quick .primary { grid-column:1 / -1; }
+    .quick .textarea { min-height:42px; }
+    .quick .primary { min-height:36px; }
+    .field { display:grid; gap:4px; }
+    .field label { color:#6b7280; font-size:12px; }
+    .input,.select,.textarea { width:100%; border:1px solid var(--line); border-radius:6px; background:#fff; min-height:34px; padding:7px 10px; font-size:12px; }
+    .textarea { min-height:66px; resize:vertical; }
+    .priority-row { display:flex; gap:6px; }
+    .priority-row button { flex:1; border:1px solid var(--line); border-radius:4px; background:#fff; height:28px; font-size:12px; }
+    .priority-row button.active { background:#fff7ed; border-color:#fdba74; color:#ea580c; font-weight:800; }
+    .checkline { display:flex; align-items:center; gap:6px; color:#4b5563; font-size:12px; }
+    .primary { height:34px; border:0; border-radius:4px; background:#0b63e5; color:#fff; font-weight:800; display:flex; align-items:center; justify-content:center; gap:6px; }
+    .secondary { height:30px; border:1px solid var(--line); border-radius:4px; background:#fff; color:#374151; }
+    .danger { height:30px; border:0; border-radius:4px; background:#dc2626; color:#fff; }
+    .success { height:30px; border:0; border-radius:4px; background:#16a34a; color:#fff; }
+    .ops-grid { display:contents; }
+    .report-settings-grid { display:grid; grid-template-columns:1fr; gap:var(--gap); }
+    .repo-grid,.analytics-grid { display:grid; grid-template-columns:1fr; gap:var(--gap); }
+    .metric-strip { padding:var(--pad); display:grid; grid-template-columns:repeat(4,1fr); gap:var(--inner-gap); border-bottom:1px solid var(--line); }
+    .mini-metric { border:1px solid var(--line2); border-radius:8px; padding:var(--pad-sm); background:#fbfdff; }
+    .mini-metric b { display:block; font-size:20px; line-height:1.1; margin-bottom:4px; }
+    .mini-metric span { color:#64748b; font-size:12px; }
+    .settings-list { padding:var(--pad); display:grid; gap:var(--inner-gap); }
+    .settings-item { display:grid; grid-template-columns:96px 1fr; gap:8px; align-items:start; color:#374151; font-size:12px; }
+    .settings-item span:first-child { color:#64748b; }
+    .settings-code { font:11px ui-monospace,SFMono-Regular,Menlo,monospace; color:#334155; white-space:pre-wrap; word-break:break-all; }
+    .settings-summary { padding:var(--pad); display:grid; grid-template-columns:repeat(3,1fr); gap:var(--inner-gap); border-bottom:1px solid var(--line); background:#fbfdff; }
+    .settings-summary-item { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:grid; gap:4px; }
+    .settings-summary-item b { font-size:16px; }
+    .settings-summary-item span { color:#64748b; font-size:12px; }
+    #settings { position:relative; overflow:visible; }
+    .settings-diagnostics { border-top:1px solid var(--line); position:relative; }
+    .settings-diagnostics summary { list-style:none; cursor:pointer; padding:12px var(--pad); display:flex; align-items:center; justify-content:space-between; color:#334155; font-weight:800; font-size:13px; }
+    .settings-diagnostics summary::-webkit-details-marker { display:none; }
+    .settings-diagnostics summary::after { content:"展开"; color:#2563eb; font-size:12px; font-weight:700; }
+    .settings-diagnostics[open] summary::after { content:"收起"; }
+    .settings-diagnostics .settings-list { display:none; position:absolute; left:0; right:0; top:100%; z-index:45; max-height:min(520px,58vh); overflow:auto; background:#fff; border:1px solid var(--line); border-radius:0 0 8px 8px; box-shadow:0 18px 48px rgba(15,23,42,.18); }
+    .settings-diagnostics[open] .settings-list { display:grid; }
+    .settings-form { padding:var(--pad); display:grid; grid-template-columns:1fr 1fr; gap:var(--inner-gap); border-bottom:1px solid var(--line); }
+    .settings-form .button-row { grid-column:1 / -1; }
+    .acp-strip { padding:var(--pad); border-top:1px solid var(--line); display:grid; gap:var(--inner-gap); }
+    .acp-tools { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; }
+    .acp-tool { border:1px solid var(--line2); border-radius:4px; padding:7px; background:#fbfdff; font-size:12px; display:grid; gap:4px; }
+    .acp-tool b { font-size:12px; }
+    .token-plan { border:1px solid var(--line2); border-radius:4px; background:#fbfdff; padding:8px; display:grid; gap:6px; font-size:12px; color:#475569; }
+    .token-chain { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    .analytics-cards { padding:var(--pad); display:grid; grid-template-columns:repeat(4,1fr); gap:var(--inner-gap); }
+    .analytics-card { border:1px solid var(--line2); border-radius:8px; padding:var(--pad-sm); background:#fbfdff; display:grid; gap:var(--inner-gap); min-height:102px; }
+    .analytics-card b { font-size:22px; line-height:1; }
+    .analytics-card span { color:#64748b; font-size:12px; }
+    .bar-row { display:grid; grid-template-columns:90px 1fr 42px; gap:8px; align-items:center; font-size:12px; color:#475569; }
+    .bar { height:7px; border-radius:999px; background:#e2e8f0; overflow:hidden; }
+    .bar span { display:block; height:100%; background:#2563eb; }
+    .decision-form { padding:var(--pad); display:grid; grid-template-columns:170px 1fr 1fr 110px; gap:var(--inner-gap); border-bottom:1px solid var(--line); align-items:start; }
+    .decision-form .textarea { min-height:38px; }
+    .board { display:grid; grid-template-columns:repeat(4,minmax(220px,1fr)); gap:var(--inner-gap); padding:var(--pad); }
+    .col { border:1px solid var(--line); border-radius:8px; overflow:hidden; min-height:310px; }
+    .col.collapsed { min-height:0; }
+    .col.todo { background:#f8fbff; } .col.running { background:#f0f7ff; } .col.review { background:#fff8f1; } .col.done { background:#f0fdf8; }
+    .col-head { height:46px; display:flex; align-items:center; gap:8px; padding:0 14px; border-bottom:1px solid var(--line); font-weight:900; cursor:pointer; user-select:none; }
+    .col-toggle { margin-left:auto; color:#64748b; font-size:12px; font-weight:800; }
+    .col-summary { padding:10px 14px; color:#64748b; font-size:12px; border-bottom:1px solid var(--line2); background:rgba(255,255,255,.56); }
+    .col.collapsed .cards,.col.collapsed .add-task { display:none; }
+    .count { font-weight:900; }
+    .cards { padding:10px; display:grid; gap:10px; }
+    .board-brief { background:#fff; border:1px solid #d7e0eb; border-radius:7px; padding:10px; display:grid; gap:9px; box-shadow:0 1px 1px rgba(15,23,42,.04); }
+    .brief-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .brief-stat { border:1px solid var(--line2); border-radius:6px; background:#fbfdff; padding:7px; display:grid; gap:2px; }
+    .brief-stat b { font-size:16px; line-height:1; }
+    .brief-stat span { color:#64748b; font-size:11px; }
+    .brief-latest { border:1px solid #bfdbfe; background:#eff6ff; border-radius:6px; padding:8px; cursor:pointer; display:grid; gap:5px; }
+    .brief-latest-title { color:#0f172a; font-size:12px; font-weight:900; line-height:1.35; }
+    .brief-empty { color:#94a3b8; font-size:12px; padding:8px; }
+    .brief-alert { border-color:#fecdd3; background:#fff1f2; }
+    .task { background:#fff; border:1px solid #d7e0eb; border-radius:7px; padding:12px; cursor:pointer; box-shadow:0 1px 1px rgba(15,23,42,.04); }
+    .task.active { border-color:#1769f8; box-shadow:0 0 0 2px rgba(23,105,248,.15); }
+    .task-title { font-weight:800; font-size:13px; margin-bottom:8px; }
+    .task-meta { display:flex; gap:6px; align-items:center; flex-wrap:wrap; color:#6b7280; font-size:12px; }
+    .task-bottom { display:flex; justify-content:space-between; align-items:center; margin-top:8px; color:#6b7280; font-size:12px; }
+    .add-task { border:0; background:transparent; color:#2563eb; padding:8px 10px; text-align:left; }
+    .detail { position:static; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); height:auto; min-height:0; overflow:visible; }
+    .detail-head { height:var(--head-h); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:var(--inner-gap); padding:0 var(--pad); color:#1d4ed8; font-weight:900; }
+    .detail-actions { margin-left:auto; display:flex; gap:8px; color:#6b7280; }
+    .detail-actions button { border:0; background:transparent; color:#64748b; padding:2px 4px; }
+    .detail-body { padding:var(--pad); display:grid; grid-template-columns:minmax(220px,.8fr) minmax(260px,1fr) minmax(300px,1.1fr); gap:var(--inner-gap); align-items:start; }
+    .detail-title { font-size:15px; font-weight:900; line-height:1.4; }
+    .detail-title,#detailTags { grid-column:1 / -1; }
+    .detail-summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .kv { display:grid; grid-template-columns:64px 1fr; gap:6px; color:#374151; font-size:12px; align-items:start; }
+    .detail-summary-grid .kv { border:1px solid var(--line2); border-radius:6px; background:#fbfdff; padding:8px; grid-template-columns:1fr; gap:3px; }
+    .kv span:first-child { color:#6b7280; }
+    .detail-compact { display:grid; gap:10px; }
+    .detail-body > .field { grid-column:2; }
+    .detail-log-block { grid-column:3; min-width:0; }
+    .detail-config { border:1px solid var(--line); border-radius:7px; background:#fff; overflow:visible; position:relative; }
+    .detail-body > .detail-config { grid-column:1 / -1; }
+    .detail-config summary { list-style:none; cursor:pointer; padding:10px 12px; display:flex; justify-content:space-between; color:#334155; font-weight:900; font-size:12px; background:#fbfdff; }
+    .detail-config summary::-webkit-details-marker { display:none; }
+    .detail-config summary::after { content:"展开"; color:#2563eb; font-weight:800; }
+    .detail-config[open] summary::after { content:"收起"; }
+    .detail-config-body { padding:12px; display:none; gap:10px; position:absolute; left:0; right:0; top:100%; z-index:40; max-height:min(520px,58vh); overflow:auto; background:#fff; border:1px solid var(--line); border-radius:0 0 8px 8px; box-shadow:0 18px 48px rgba(15,23,42,.18); }
+    .detail-config[open] .detail-config-body { display:grid; }
+    .log { background:#111827; color:#e5e7eb; border-radius:6px; padding:10px; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; min-height:72px; max-height:118px; overflow:auto; }
+    .hint-box { border:1px solid var(--line); background:#fbfdff; border-radius:4px; padding:8px; color:#4b5563; font-size:12px; white-space:pre-wrap; max-height:72px; overflow:auto; }
+    .detail-footer { border-top:1px solid var(--line); padding:var(--pad); display:grid; grid-template-columns:minmax(180px,.75fr) minmax(280px,1fr) minmax(220px,.8fr); gap:var(--inner-gap); align-items:center; }
+    .button-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .button-row.three { grid-template-columns:1fr 1fr 1fr; }
+    .board-float-mask { position:fixed; inset:0; background:rgba(15,23,42,.22); z-index:80; display:none; align-items:center; justify-content:center; padding:28px; }
+    .board-float-mask.show { display:flex; }
+    .board-float { width:min(720px,calc(100vw - 56px)); max-height:calc(100vh - 72px); background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 24px 70px rgba(15,23,42,.26); overflow:hidden; display:grid; grid-template-rows:auto auto minmax(0,1fr); }
+    .board-float-head { height:48px; padding:0 14px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--line); }
+    .board-float-head b { font-size:14px; }
+    .board-float-head button { margin-left:auto; border:0; background:transparent; color:#64748b; font-size:18px; cursor:pointer; }
+    .board-float-summary { padding:10px 14px; border-bottom:1px solid var(--line2); background:#fbfdff; color:#64748b; font-size:12px; }
+    .board-float-list { padding:var(--pad); overflow:auto; display:grid; gap:var(--inner-gap); }
+    .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(12px); opacity:0; pointer-events:none; transition:.18s; background:#111827; color:#fff; padding:10px 14px; border-radius:6px; z-index:100; font-size:12px; }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+    @media (max-width:1280px) { .workspace { grid-template-columns:1fr; } .detail { position:static; min-height:auto; } .midrow { grid-template-columns:1fr; } .report-settings-grid { grid-template-columns:1fr; } }
+    @media (max-width:860px) { :root { --side-w:64px; } .brand-text,.nav-text,.sidebar-foot .ver { display:none; } .nav-item { justify-content:center; padding:0; } .badge { position:absolute; right:2px; top:4px; } .risk-grid,.board,.decision-form,.project-tools,.metric-strip,.settings-form,.analytics-cards,.detail-body,.detail-footer { grid-template-columns:1fr; } .detail-title,#detailTags,.detail-body > .field,.detail-log-block,.detail-body > .detail-config { grid-column:1; } .top-meta { display:none; } .title { font-size:15px; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">FZ</div>
+        <div class="brand-text">
+          <div class="brand-title">重庆泛智电子</div>
+          <div class="brand-sub">FANZHI ELECTRONICS</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-item active" href="#workbench"><span class="nav-ico">⌂</span><span class="nav-text">工作台</span></a>
+        <a class="nav-item" href="#projects"><span class="nav-ico">▦</span><span class="nav-text">项目总览</span></a>
+        <a class="nav-item" href="#taskCenterSection"><span class="nav-ico">☷</span><span class="nav-text">任务中心</span><span class="badge" id="navTaskBadge">0</span></a>
+        <a class="nav-item" href="#detail"><span class="nav-ico">☑</span><span class="nav-text">评审中心</span><span class="badge" id="navReviewBadge">0</span></a>
+        <a class="nav-item" href="#risks"><span class="nav-ico">△</span><span class="nav-text">风险与提醒</span><span class="badge" id="navRiskBadge">0</span></a>
+        <a class="nav-item" href="#toolsSection"><span class="nav-ico">◉</span><span class="nav-text">AI 调度中心</span></a>
+        <a class="nav-item" href="#ops"><span class="nav-ico">▤</span><span class="nav-text">CEO 指挥台</span></a>
+        <a class="nav-item" href="#decisions"><span class="nav-ico">□</span><span class="nav-text">决策日志</span></a>
+        <a class="nav-item" href="#repositories"><span class="nav-ico">⌘</span><span class="nav-text">代码仓库</span></a>
+        <a class="nav-item" href="#toolsSection"><span class="nav-ico">☁</span><span class="nav-text">环境与服务</span></a>
+        <a class="nav-item" href="#analytics"><span class="nav-ico">▣</span><span class="nav-text">数据看板</span></a>
+        <a class="nav-item" href="#reports"><span class="nav-ico">☰</span><span class="nav-text">报表中心</span></a>
+        <a class="nav-item" href="#settings"><span class="nav-ico">⚙</span><span class="nav-text">设置中心</span></a>
+      </nav>
+      <div class="sidebar-foot"><span><span class="dot"></span>本地环境</span><span class="ver">v2.5.0</span></div>
+    </aside>
+
+    <main class="main" id="workbench">
+      <header class="topbar">
+        <button class="hamburger">☰</button>
+        <div class="title">重庆泛智电子 · 项目工作台</div>
+        <div class="top-spacer"></div>
+        <div class="top-meta">
+          <span id="clockText">--</span><span>|</span>
+          <span>本地环境：<b class="ok">正常 ●</b></span><span>|</span>
+          <span>AI 服务：<b class="ok" id="aiHealth">正常 ●</b></span><span>|</span>
+          <button class="refresh" onclick="loadAll()">↻ 刷新</button><span>|</span>
+          <span class="avatar">●</span><span>CEO / 创始人⌄</span>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="workspace">
+          <div class="left">
+            <section class="kpis" id="kpiStrip">
+              <div class="kpi"><div><div class="kpi-label">项目总数</div><div class="kpi-value" id="kpiProjects">0</div></div><div class="kpi-icon ico-blue">▣</div><div class="kpi-foot">进行中 <b id="activeProjectsText">0</b>　已归档 <b class="ok" id="archivedProjectsText">0</b></div></div>
+              <div class="kpi"><div><div class="kpi-label">任务总数</div><div class="kpi-value" id="kpiTasks">0</div></div><div class="kpi-icon ico-green">▤</div><div class="kpi-foot">今日新增 <b id="todayTasksText">0</b>　待处理 <b style="color:#e11d48" id="todoText">0</b></div></div>
+              <div class="kpi"><div><div class="kpi-label">AI 任务执行</div><div class="kpi-value" id="kpiAiRate">0%</div></div><div class="kpi-icon ico-blue">⌁</div><div class="kpi-foot">成功率 <b class="ok" id="successRateText">-</b></div></div>
+              <div class="kpi"><div><div class="kpi-label">评审中任务</div><div class="kpi-value" id="kpiReview">0</div></div><div class="kpi-icon ico-orange">●</div><div class="kpi-foot">超时 <b style="color:#e11d48" id="reviewRiskText">0</b></div></div>
+              <div class="kpi"><div><div class="kpi-label">风险事项</div><div class="kpi-value" id="kpiRisks">0</div></div><div class="kpi-icon ico-red">!</div><div class="kpi-foot">高风险 <b style="color:#e11d48" id="highRiskText">0</b></div></div>
+              <div class="kpi"><div><div class="kpi-label">系统健康分</div><div class="kpi-value" id="kpiHealth">92<small style="font-size:14px">/100</small></div></div><div class="kpi-icon ico-green">✦</div><div class="kpi-foot"><b class="ok" id="healthText">良好</b></div></div>
+              <div class="kpi"><div><div class="kpi-label">本地存储</div><div class="kpi-value">61%</div></div><div class="kpi-icon ico-blue">◉</div><div class="kpi-foot">可用 <b>94.2 GB</b></div></div>
+            </section>
+
+            <section class="panel" id="risks">
+              <div class="panel-head"><span class="panel-title">风险与提醒</span><div class="tabs"><span class="tab active">全部 <b id="riskTotalTab">0</b></span><span>高风险 <b id="riskHighTab">0</b></span><span>中风险 <b id="riskMidTab">0</b></span><span>低风险 0</span></div><button class="panel-link">查看全部 ›</button></div>
+              <div class="risk-grid" id="riskGrid"></div>
+            </section>
+
+            <section class="midrow">
+              <div class="midcol">
+                <div class="panel" id="projects">
+                  <div class="project-head">
+                    <div class="project-head-top"><span class="panel-title">项目治理概览</span><span class="pill blue-tag" id="projectCountPill">0 个项目</span><button class="panel-link" onclick="exportTasks()">导出任务 ›</button></div>
+                    <div class="project-tools">
+                      <input id="projectSearch" class="input" placeholder="搜索项目" oninput="renderProjects()" />
+                      <input id="newProjectName" class="input" placeholder="新项目名" />
+                      <button class="secondary" onclick="createProject()">新建</button>
+                      <button class="secondary" onclick="unarchiveSelectedProject()">恢复</button>
+                      <button class="secondary danger" onclick="deleteSelectedProject()">删除</button>
+                    </div>
+                  </div>
+                  <div class="project-table-wrap"><table><thead><tr><th>项目</th><th>阶段/进度</th><th>治理资产</th><th>任务(待/总)</th><th>风险</th><th>操作</th></tr></thead><tbody id="projectsBody"></tbody></table></div>
+                </div>
+                <div class="panel quick-panel">
+                  <div class="panel-head"><span class="panel-title">快速创建任务</span></div>
+                  <div class="quick">
+                    <div class="field"><label>任务名称</label><input id="newTitle" class="input" placeholder="输入任务名称（必填）" /></div>
+                    <div class="field"><label>所属项目</label><select id="newProject" class="select"></select></div>
+                    <div class="field"><label>任务类型</label><select id="newTaskType" class="select"><option value="fullstack">全栈研发</option><option value="market_research">市场调研</option><option value="architecture">架构设计</option><option value="code_edit">代码修改</option><option value="testing">测试验证</option><option value="docs">文档交付</option><option value="security_review">安全审查</option><option value="quality_review">质量审查</option><option value="delivery">交付打包</option></select></div>
+                    <div class="field"><label>优先级</label><div class="priority-row"><button onclick="setNewPriority('P2')" id="newP2">低</button><button onclick="setNewPriority('P1')" id="newP1" class="active">中</button><button onclick="setNewPriority('P0')" id="newP0">高</button></div></div>
+                    <div class="field"><label>指派给</label><select id="newAI" class="select"><option>Antigravity</option><option>Claude Code</option><option>Codex</option><option>Gemini</option><option>Cursor</option><option>Other</option></select></div>
+                    <label class="checkline"><input id="newAutoRoute" type="checkbox" checked /> 智能路由工具</label>
+                    <label class="checkline"><input id="autoDispatch" type="checkbox" /> 创建后立即执行（AI 调度）</label>
+                    <input id="newDueAt" class="input" placeholder="截止：2026-05-20 18:00:00" />
+                    <textarea id="newAIInstruction" class="textarea" placeholder="给 AI 的明确指令"></textarea>
+                    <input id="newLockedScope" class="input" placeholder="锁定文件/模块范围" />
+                    <input id="newExpectedOutput" class="input" placeholder="预期产物" />
+                    <button class="primary" onclick="createTask()">＋ 创建任务</button>
+                  </div>
+                </div>
+              </div>
+              <div class="midcol">
+                <div class="panel" id="decisions">
+                  <div class="panel-head"><span class="panel-title">CEO 决策日志</span><button class="panel-link" onclick="loadDecisions()">刷新 ›</button></div>
+                  <div class="decision-form">
+                    <select id="decisionProject" class="select"></select>
+                    <textarea id="decisionText" class="textarea" placeholder="关键决策"></textarea>
+                    <textarea id="decisionReason" class="textarea" placeholder="背景与理由"></textarea>
+                    <button class="primary" onclick="createDecisionLog()">记录</button>
+                  </div>
+                  <div style="overflow:auto"><table><thead><tr><th>时间</th><th>项目</th><th>决策</th></tr></thead><tbody id="decisionRows"></tbody></table></div>
+                </div>
+                <div class="panel ops-panel" id="ops">
+                  <div class="panel-head"><span class="panel-title">CEO 运营指挥台</span><button class="panel-link" onclick="loadCommandCenter()">刷新 ›</button></div>
+                  <div style="overflow:auto"><table><thead><tr><th>优先级</th><th>下一步动作</th><th>队列</th></tr></thead><tbody id="opsRows"></tbody></table></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="report-settings-grid">
+              <div class="panel" id="reports">
+                <div class="panel-head"><span class="panel-title">报表中心</span><button class="secondary" onclick="downloadOpsReport()">下载运营报表</button><button class="secondary" onclick="exportTasks()">导出任务 CSV</button><button class="panel-link" onclick="loadAll()">刷新 ›</button></div>
+                <div class="metric-strip">
+                  <div class="mini-metric"><b id="reportTotalTasks">0</b><span>任务总数</span></div>
+                  <div class="mini-metric"><b id="reportDoneTasks">0</b><span>已完成</span></div>
+                  <div class="mini-metric"><b id="reportFailedTasks">0</b><span>调度失败</span></div>
+                  <div class="mini-metric"><b id="reportReviewTasks">0</b><span>待人工审查</span></div>
+                </div>
+                <div style="overflow:auto"><table><thead><tr><th>类型</th><th>数量</th><th>说明</th></tr></thead><tbody id="reportRows"></tbody></table></div>
+              </div>
+            </section>
+
+            <section class="analytics-grid" id="analytics">
+              <div class="panel">
+                <div class="panel-head"><span class="panel-title">数据看板</span><button class="panel-link" onclick="loadAll()">刷新 ›</button></div>
+                <div class="analytics-cards">
+                  <div class="analytics-card"><span>项目平均治理分</span><b id="analyticsGovernance">0</b><div class="bar"><span id="analyticsGovernanceBar" style="width:0%"></span></div></div>
+                  <div class="analytics-card"><span>任务完成率</span><b id="analyticsDoneRate">0%</b><div class="bar"><span id="analyticsDoneBar" style="width:0%"></span></div></div>
+                  <div class="analytics-card"><span>AI 可调度工具</span><b id="analyticsRunnableTools">0</b><span id="analyticsToolHint">等待检测</span></div>
+                  <div class="analytics-card"><span>仓库健康</span><b id="analyticsRepoHealth">0%</b><span id="analyticsRepoHint">暂无仓库</span></div>
+                </div>
+                <div style="padding:0 10px 10px;display:grid;gap:8px" id="analyticsBars"></div>
+              </div>
+            </section>
+
+            <section class="panel" id="taskCenterSection">
+              <div class="panel-head"><span class="panel-title">工作队列（看板）</span><div class="top-spacer"></div><button class="secondary" onclick="setBoardCollapsed(false)">打开浮窗</button><button class="secondary" onclick="setBoardCollapsed(true)">关闭浮窗</button><button class="secondary" onclick="loadAll()">刷新</button><select id="taskSort" class="select" style="width:130px" onchange="loadAll()"><option value="updated_at">排序：更新倒序</option><option value="due_at">排序：截止时间</option><option value="priority">排序：优先级</option></select><input id="taskSearch" class="input" style="width:170px" placeholder="筛选任务" oninput="loadAll()" /></div>
+              <div class="board">
+                <div class="col todo" id="colWrapTodo"><div class="col-head" onclick="toggleBoardColumn('待分配')">待处理 <span class="count" id="countTodo">0</span><span class="col-toggle" id="toggleTodo">收起</span></div><div class="col-summary" id="summaryTodo"></div><div class="cards" id="colTodo"></div><button class="add-task" onclick="focusCreate()">＋ 添加任务</button></div>
+                <div class="col running" id="colWrapRunning"><div class="col-head" style="color:#0b63e5" onclick="toggleBoardColumn('AI执行中')">进行中 <span class="count" id="countRunning">0</span><span class="col-toggle" id="toggleRunning">收起</span></div><div class="col-summary" id="summaryRunning"></div><div class="cards" id="colRunning"></div><button class="add-task" onclick="focusCreate()">＋ 添加任务</button></div>
+                <div class="col review" id="colWrapReview"><div class="col-head" style="color:#ea580c" onclick="toggleBoardColumn('待人工审查')">待评审 <span class="count" id="countReview">0</span><span class="col-toggle" id="toggleReview">展开</span></div><div class="col-summary" id="summaryReview"></div><div class="cards" id="colReview"></div><button class="add-task" onclick="focusCreate()">＋ 添加任务</button></div>
+                <div class="col done" id="colWrapDone"><div class="col-head" style="color:#16a34a" onclick="toggleBoardColumn('已完成')">已完成 <span class="count" id="countDone">0</span><span class="col-toggle" id="toggleDone">展开</span></div><div class="col-summary" id="summaryDone"></div><div class="cards" id="colDone"></div><button class="add-task" onclick="focusCreate()">＋ 添加任务</button></div>
+              </div>
+            </section>
+
+            <aside class="detail" id="detail">
+            <div class="detail-head"><span>任务详情 / 调度</span><div class="detail-actions"><button title="标为高优先级" onclick="flagTask()">⚑</button><button title="定位项目" onclick="locateTaskProject()">↗</button><button title="清空选择" onclick="clearTaskSelection()">×</button></div></div>
+            <div class="detail-body">
+              <div class="detail-title" id="detailTitle">选择任务查看详情</div>
+              <div id="detailTags"></div>
+              <div class="detail-summary-grid">
+                <div class="kv"><span>状态</span><b id="detailStatus">-</b></div>
+                <div class="kv"><span>指派给</span><b id="detailAI">-</b></div>
+                <div class="kv"><span>类型</span><b id="detailTaskType">-</b></div>
+                <div class="kv"><span>截止</span><b id="detailDue">-</b></div>
+              </div>
+              <div class="detail-compact">
+                <div style="font-size:12px;color:#4b5563;margin-bottom:6px">AI 执行进度 <span id="detailPercent" style="float:right">0%</span></div>
+                <div class="progress-pair" style="width:100%"><span class="progress" style="width:auto;flex:1;height:6px"><span id="detailProgress" style="width:0%"></span></span><span class="progress-num" id="detailProgressNum">0%</span></div>
+              </div>
+              <div class="field"><label>路由理由</label><div id="detailRoutingReason" class="hint-box">-</div></div>
+              <div class="field" id="detailFailureField" style="display:none"><label>失败回退原因</label><div id="detailFailureBox" class="hint-box alert">-</div></div>
+              <div class="detail-log-block">
+                <div style="font-size:12px;color:#4b5563;margin-bottom:6px">最近执行日志（预览）</div>
+                <pre class="log" id="detailLog">暂无日志</pre>
+              </div>
+              <details class="detail-config" id="detailConfig">
+                <summary>任务配置与评审意见</summary>
+                <div class="detail-config-body">
+                  <div class="kv"><span>创建时间</span><b id="detailCreated">-</b></div>
+                  <div class="field"><label>任务描述 / 验收标准</label><textarea id="editAcceptance" class="textarea"></textarea></div>
+                  <div class="field"><label>给 AI 的指令</label><textarea id="editAIInstruction" class="textarea"></textarea></div>
+                  <div class="field"><label>锁定范围</label><input id="editLockedScope" class="input" /></div>
+                  <div class="field"><label>预期产物</label><input id="editExpectedOutput" class="input" /></div>
+                  <div class="field"><label>反馈与调整意见</label><textarea id="editReviewComment" class="textarea" placeholder="评审通过说明，或驳回重开的调整建议"></textarea></div>
+                </div>
+              </details>
+            </div>
+            <div class="detail-footer">
+              <button class="primary" onclick="dispatchTask()">▶ 调度执行</button>
+              <div class="button-row three"><button class="secondary" onclick="routeTask()">智能路由</button><button class="secondary" onclick="retryTask()">重新调度</button><button class="secondary" onclick="saveTask()">保存调整</button></div>
+              <div class="button-row"><button class="success" onclick="reviewTask('approve')">审查通过</button><button class="danger" onclick="reviewTask('reject')">拒绝</button></div>
+            </div>
+            </aside>
+          </div>
+          <aside class="right-stack" aria-label="右侧运营工具">
+            <div class="panel" id="toolsSection">
+              <div class="panel-head"><span class="panel-title">AI 工具与服务健康</span><button class="panel-link" onclick="loadAll()">刷新服务 ›</button></div>
+              <div class="tools-summary" id="toolsSummary">
+                <div class="tools-summary-item"><span>可调度工具</span><b id="toolsRunnableCount">0/0</b><span id="toolsRunnableHint">等待检测</span></div>
+                <div class="tools-summary-item"><span>ACP 互通</span><b id="toolsAcpSummary">待检测</b><span id="toolsAcpHint">五端连接状态</span></div>
+                <div class="tools-summary-item"><span>调度链路</span><b id="toolsRoutingCount">0 步</b><span id="toolsRoutingHint">低 Token 策略</span></div>
+              </div>
+              <details class="tools-details" id="toolsDetails">
+                <summary>工具明细、额度与 ACP 配置</summary>
+                <div class="tools-details-body">
+                  <div style="overflow:auto"><table><thead><tr><th>服务 - 工具</th><th>状态</th><th>额度剩余</th><th>成功率(24h)</th><th>最后检查</th></tr></thead><tbody id="toolRows"></tbody></table></div>
+                  <div class="acp-strip">
+                    <div class="project-head-top"><span class="panel-title">ACP 五端互通</span><span class="pill blue-tag" id="acpStatusPill">待检测</span><button class="panel-link" onclick="loadAcpStatus()">体检 ›</button></div>
+                    <div class="acp-tools" id="acpToolRows"></div>
+                    <div class="token-plan"><b>低 Token 调度策略</b><div class="token-chain" id="tokenRoutingChain"></div><span id="tokenRoutingReason">按任务类型自动生成最小上下文链路</span></div>
+                  </div>
+                </div>
+              </details>
+            </div>
+
+            <div class="panel" id="settings">
+              <div class="panel-head"><span class="panel-title">设置中心</span><button class="secondary" onclick="saveSettings()">保存设置</button><button class="secondary" onclick="refreshTools()">重测工具</button><button class="secondary" onclick="copySettings()">复制诊断</button><button class="panel-link" onclick="loadAll()">刷新 ›</button></div>
+              <div class="settings-form">
+                <div class="field"><label>调度超时（秒）</label><input id="settingDispatchTimeout" class="input" type="number" min="60" max="7200" step="60" /></div>
+                <div class="field"><label>看板刷新（秒）</label><input id="settingRefreshSeconds" class="input" type="number" min="5" max="300" step="5" /></div>
+                <div class="field"><label>默认任务类型</label><select id="settingDefaultTaskType" class="select"><option value="fullstack">全栈研发</option><option value="market_research">市场调研</option><option value="architecture">架构设计</option><option value="code_edit">代码修改</option><option value="testing">测试验证</option><option value="docs">文档交付</option><option value="security_review">安全审查</option><option value="quality_review">质量审查</option><option value="delivery">交付打包</option></select></div>
+                <div class="field"><label>默认执行 AI</label><select id="settingDefaultAI" class="select"><option>Other</option><option>Antigravity</option><option>Claude Code</option><option>Codex</option><option>Gemini</option><option>Cursor</option></select></div>
+                <label class="checkline"><input id="settingAutoRoute" type="checkbox" /> 新任务默认智能路由</label>
+                <div class="button-row"><button class="secondary" onclick="resetSettings()">恢复默认</button><button class="secondary" onclick="applySettingsToQuickCreate()">应用到快速创建</button></div>
+              </div>
+              <div class="settings-summary" id="settingsSummary"></div>
+              <details class="settings-diagnostics" id="settingsDiagnostics">
+                <summary>运行诊断与高级信息</summary>
+                <div class="settings-list" id="settingsRows"></div>
+              </details>
+            </div>
+
+            <section class="repo-grid" id="repositories">
+              <div class="panel">
+                <div class="panel-head"><span class="panel-title">代码仓库</span><span class="pill blue-tag" id="repoCountPill">0 个仓库</span><button class="secondary" onclick="toggleDirtyRepos()" id="dirtyRepoToggle">仅看变更</button><button class="panel-link" onclick="loadRepositories()">刷新 ›</button></div>
+                <div class="metric-strip">
+                  <div class="mini-metric"><b id="repoTotalCount">0</b><span>项目目录</span></div>
+                  <div class="mini-metric"><b id="repoGitCount">0</b><span>Git 仓库</span></div>
+                  <div class="mini-metric"><b id="repoDirtyCount">0</b><span>有变更</span></div>
+                  <div class="mini-metric"><b id="repoNoGitCount">0</b><span>未初始化</span></div>
+                </div>
+                <div class="repo-ops" id="repoOps"></div>
+                <div class="repo-table-wrap"><table><thead><tr><th>仓库</th><th>分支</th><th>状态</th><th>最近提交</th><th>操作</th></tr></thead><tbody id="repoRows"></tbody></table></div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+  <div class="board-float-mask" id="boardFloatMask" onclick="closeBoardFloat(event)">
+    <div class="board-float" onclick="event.stopPropagation()">
+      <div class="board-float-head"><b id="boardFloatTitle">任务列表</b><span class="pill" id="boardFloatCount">0</span><button onclick="closeBoardFloat()">×</button></div>
+      <div class="board-float-summary" id="boardFloatSummary">暂无任务</div>
+      <div class="board-float-list" id="boardFloatList"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    let projects = [];
+    let archivedProjects = [];
+    let tasks = [];
+    let selectedTaskId = null;
+    let toolsStatus = {};
+    let healthStatus = {};
+    let briefData = {};
+    let commandCenter = {};
+    let decisions = [];
+    let repositories = [];
+    let repoCounts = {};
+    let visibleRepositories = [];
+    let operationsReport = {};
+    let acpStatus = {};
+    let tokenRouting = {};
+    let onlyDirtyRepos = false;
+    let appSettings = {};
+    let routingRules = {};
+    let settingsDiagnosticsOpen = false;
+    const boardCollapsedDefaults = {"待分配":false,"AI执行中":false,"待人工审查":true,"已完成":true};
+    const boardCollapsedStorageKey = "ceoConsole.boardCollapsed.v1";
+    let boardCollapsed = loadBoardCollapsed();
+    let newPriority = "P1";
+    let toastTimer = null;
+    let selectedProjectName = null;
+    let boardFloatStatus = null;
+    let refreshTimer = null;
+    let liveDetailTimer = null;
+    const statusMap = {"待分配":["colTodo","countTodo","colWrapTodo","toggleTodo","summaryTodo"],"AI执行中":["colRunning","countRunning","colWrapRunning","toggleRunning","summaryRunning"],"待人工审查":["colReview","countReview","colWrapReview","toggleReview","summaryReview"],"已完成":["colDone","countDone","colWrapDone","toggleDone","summaryDone"]};
+    const taskTypeLabel = {market_research:"市场调研", architecture:"架构设计", fullstack:"全栈研发", code_edit:"代码修改", testing:"测试验证", docs:"文档交付", security_review:"安全审查", quality_review:"质量审查", delivery:"交付打包"};
+
+    function qs(id){ return document.getElementById(id); }
+    function esc(v){ return String(v ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;"); }
+    async function fetchJSON(url,opt){ const r=await fetch(url,opt); const t=await r.text(); if(!r.ok){ let m=t; try{m=JSON.parse(t).error || t;}catch(_){} throw new Error(m || `HTTP ${r.status}`); } return t ? JSON.parse(t) : {}; }
+    function toast(msg){ const el=qs("toast"); el.textContent=msg; el.classList.add("show"); clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.classList.remove("show"),2400); }
+    function loadBoardCollapsed(){
+      try {
+        const saved = JSON.parse(localStorage.getItem(boardCollapsedStorageKey) || "{}");
+        return Object.fromEntries(Object.keys(boardCollapsedDefaults).map(status => [status, typeof saved[status] === "boolean" ? saved[status] : boardCollapsedDefaults[status]]));
+      } catch (_) {
+        return {...boardCollapsedDefaults};
+      }
+    }
+    function saveBoardCollapsed(){
+      try { localStorage.setItem(boardCollapsedStorageKey, JSON.stringify(boardCollapsed)); } catch (_) {}
+    }
+    function nowClock(){ const d=new Date(); const p=n=>String(n).padStart(2,"0"); qs("clockText").textContent = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}　星期${"日一二三四五六"[d.getDay()]}　${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
+    setInterval(nowClock, 1000); nowClock();
+    function bindHorizontalWheel(){
+      const strip = qs("kpiStrip");
+      if (!strip) return;
+      strip.addEventListener("wheel", event => {
+        if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+        if (strip.scrollWidth <= strip.clientWidth) return;
+        event.preventDefault();
+        strip.scrollLeft += event.deltaY;
+      }, {passive:false});
+    }
+    bindHorizontalWheel();
+
+    function taskPercent(t){
+      const lines = (t.execution_progress || "").split(/\r?\n/).filter(Boolean).length;
+      if (t.execution_state === "succeeded" || t.status === "已完成") return 100;
+      if (t.execution_state === "failed" || t.execution_state === "unsupported") return 100;
+      if (t.execution_state === "running") return Math.min(95, 20 + lines * 8);
+      return t.status === "待人工审查" ? 100 : 0;
+    }
+    function effectiveTaskStatus(t){
+      if (t.execution_state === "succeeded" && t.review_result === "approved") return "已完成";
+      if (t.execution_state === "succeeded" && t.status === "AI执行中") return "待人工审查";
+      if (["failed","unsupported"].includes(t.execution_state) && t.status === "AI执行中") return "待分配";
+      return t.status || "待分配";
+    }
+    function isReworkTask(t){ return ["failed","unsupported"].includes(t.execution_state); }
+    function taskFailureReason(t){
+      if (!isReworkTask(t)) return "";
+      const raw = t.execution_error || "";
+      if (raw) return raw;
+      const progress = (t.execution_progress || "").split(/\r?\n/).filter(Boolean).reverse();
+      return progress.find(line => line.includes("失败") || line.includes("异常") || line.includes("不支持")) || "执行失败，等待重新调度";
+    }
+    function isLiveTask(t){ return !!t && (t.execution_state === "running" || effectiveTaskStatus(t) === "AI执行中"); }
+    function tailText(text, max=9000){ const value = String(text || ""); return value.length > max ? `...（已截取最新 ${max} 字符）\n${value.slice(-max)}` : value; }
+    function taskLogPreview(t){
+      const progress = tailText(t.execution_progress || "", 3500);
+      const output = tailText(t.execution_output || "", 9000);
+      if (progress && output) return `【执行进度】\n${progress}\n\n【输出日志（最新预览）】\n${output}`;
+      return output || progress || "[09:15:22] 等待调度...\n[09:15:27] 本地服务正常\n[09:15:29] 任务详情已载入";
+    }
+    function setNewPriority(p){ newPriority = p; ["P0","P1","P2"].forEach(x => qs(`new${x}`).classList.toggle("active", x === p)); }
+    function currentTask(){ return tasks.find(t => t.id === selectedTaskId) || tasks[0] || null; }
+
+    function renderKpis(summary){
+      const counts = summary.counts || {};
+      const totalTasks = tasks.length;
+      const done = counts["已完成"] || 0;
+      const failed = summary.failed_dispatch_count || 0;
+      const review = counts["待人工审查"] || 0;
+      const warnings = (briefData.warnings || []).length;
+      const risks = warnings + failed + (briefData.overdue_tasks || []).length;
+      qs("kpiProjects").textContent = summary.active_projects || projects.length || 0;
+      qs("activeProjectsText").textContent = projects.length || 0;
+      qs("archivedProjectsText").textContent = archivedProjects.length || 0;
+      qs("kpiTasks").textContent = totalTasks;
+      qs("todayTasksText").textContent = tasks.filter(t => (t.created_at || "").slice(0,10) === (summary.date || "")).length;
+      qs("todoText").textContent = counts["待分配"] || 0;
+      qs("kpiAiRate").textContent = totalTasks ? `${Math.round((done / totalTasks) * 100)}%` : "0%";
+      qs("successRateText").textContent = failed ? `失败 ${failed}` : "稳定";
+      qs("kpiReview").textContent = review;
+      qs("reviewRiskText").textContent = summary.overdue_count || 0;
+      qs("kpiRisks").textContent = risks;
+      qs("highRiskText").textContent = failed + (briefData.overdue_tasks || []).length;
+      qs("navTaskBadge").textContent = counts["待分配"] || 0;
+      qs("navReviewBadge").textContent = review;
+      qs("navRiskBadge").textContent = risks;
+      qs("healthText").textContent = ((healthStatus.launchd || {}).loaded) ? "良好" : "需检查";
+      qs("aiHealth").textContent = failed ? "受限 ●" : "正常 ●";
+    }
+
+    function renderRisks(){
+      const risks = [];
+      (briefData.overdue_tasks || []).slice(0,2).forEach(t => risks.push({level:"高风险", cls:"high", title:`项目「${t.project}」任务超时`, scope:"任务进度", owner:t.assignee_ai || "AI", time:t.due_at || "-"}));
+      (briefData.failed_dispatch_tasks || commandCenter.failed_dispatch_tasks || []).slice(0,2).forEach(t => risks.push({level:"中风险", cls:"midrisk", title:`AI 任务失败：${t.title}`, scope:"执行效率", owner:"调度器", time:"最近"}));
+      if (!risks.length) risks.push({level:"低风险", cls:"low", title:"当前无关键风险事项", scope:"全局", owner:"系统", time:"刚刚"});
+      while (risks.length < 4) risks.push({level:"中风险", cls:"midrisk", title:"任务队列需持续关注", scope:"项目交付", owner:"CEO", time:"今日"});
+      qs("riskTotalTab").textContent = risks.length;
+      qs("riskHighTab").textContent = risks.filter(r => r.cls === "high").length;
+      qs("riskMidTab").textContent = risks.filter(r => r.cls === "midrisk").length;
+      qs("riskGrid").innerHTML = risks.slice(0,4).map(r => `<div class="risk-card"><div class="risk-top"><span class="risk-badge ${r.cls}">${esc(r.level)}</span><span>${esc(r.title)}</span></div><div class="risk-meta"><span>影响范围：${esc(r.scope)}</span><span>负责人：${esc(r.owner)}</span><span>时间：${esc(r.time)}</span></div></div>`).join("");
+    }
+
+    function projectTaskStats(name){
+      const rows = tasks.filter(t => t.project === name);
+      return {total: rows.length, active: rows.filter(t => t.status !== "已完成").length, done: rows.filter(t => t.status === "已完成").length, failed: rows.filter(t => ["failed","unsupported"].includes(t.execution_state)).length};
+    }
+    function renderProjects(){
+      const q = (qs("projectSearch")?.value || "").trim().toLowerCase();
+      const rows = projects.filter(p => !q || p.name.toLowerCase().includes(q));
+      qs("newProject").innerHTML = projects.map(p => `<option>${esc(p.name)}</option>`).join("");
+      qs("decisionProject").innerHTML = projects.map(p => `<option>${esc(p.name)}</option>`).join("");
+      qs("projectCountPill").textContent = `${rows.length} / ${projects.length} 个项目`;
+      if (!rows.length) { qs("projectsBody").innerHTML = `<tr><td colspan="6">暂无项目</td></tr>`; return; }
+      qs("projectsBody").innerHTML = rows.slice(0,8).map((p, i) => {
+        const st = projectTaskStats(p.name);
+        const percent = Number.isFinite(p.governance_score) ? p.governance_score : (st.total ? Math.round((st.done / st.total) * 100) : 0);
+        const risk = st.failed ? `<span class="pill p-red">高</span>` : (st.active > 5 ? `<span class="pill p-orange">中</span>` : `<span class="pill p-green">低</span>`);
+        const name = JSON.stringify(p.name);
+        const coordinator = p.has_coordinator ? `<span class="pill p-green">coordinator</span>` : `<span class="pill p-orange">待配置</span>`;
+        const checklist = `${p.checklist_done || 0}/${p.checklist_total || 0}`;
+        const assets = `<div class="project-assets"><span class="pill ${p.has_ai_rule ? "p-green" : "p-orange"}">CLAUDE</span><span class="pill ${p.has_cursorrules ? "p-green" : "p-orange"}">Cursor</span><span class="pill blue-tag">ADR ${p.adr_count || 0}</span><span class="pill blue-tag">清单 ${checklist}</span></div>`;
+        return `<tr class="${selectedProjectName === p.name ? "sel" : ""}" onclick='selectProject(${name})'>
+          <td><div class="project-name"><b>${esc(p.name)}</b><span class="project-path">${esc(p.path || "")}</span>${coordinator}</div></td>
+          <td><div class="project-phase"><div class="project-phase-top"><span>${esc(p.phase || "治理推进")}</span><b>${percent}%</b></div><div class="progress-pair" style="width:100%"><span class="progress" style="width:auto;flex:1"><span style="width:${percent}%"></span></span><span class="progress-num">${percent}%</span></div></div></td>
+          <td>${assets}</td>
+          <td><b>${st.active}</b> / ${st.total}</td>
+          <td>${risk}</td>
+          <td><div class="project-actions"><button class="secondary" onclick='event.stopPropagation();selectProject(${name})'>选择</button><button class="secondary" onclick='event.stopPropagation();archiveProjectByName(${name})'>归档</button></div></td>
+        </tr>`;
+      }).join("");
+    }
+    function selectProject(name){ selectedProjectName = name; renderProjects(); }
+
+    function quotaHtml(info){
+      const quota = (info || {}).quota || {};
+      const recharge = quota.recharge_url ? `<a class="recharge-link" href="${esc(quota.recharge_url)}" target="_blank" rel="noopener noreferrer">充值 / 查看用量</a>` : "";
+      if (!quota.available) return `<div class="quota-cell"><div class="quota-top"><span>未接入</span><span class="quota-src">quota</span></div><div class="quota-bar"><span style="width:0%"></span></div>${recharge}</div>`;
+      const percent = quota.percent == null ? 0 : quota.percent;
+      const cls = percent <= 15 ? "danger" : (percent <= 35 ? "warn" : "");
+      const src = quota.source === "env_json" ? "配置" : (quota.source === "env" ? "环境变量" : "同步");
+      const reset = quota.reset_at ? `<span class="quota-src">重置 ${esc(quota.reset_at)}</span>` : `<span class="quota-src">${esc(src)}</span>`;
+      return `<div class="quota-cell"><div class="quota-top"><span>${esc(quota.label || "待同步")}</span>${reset}</div><div class="quota-bar ${cls}"><span style="width:${percent}%"></span></div>${recharge}</div>`;
+    }
+
+    function renderTools(){
+      const names = ["本地 LLM","代码生成助手","向量检索","任务调度服务","知识库服务","本地运行环境"];
+      const apiNames = ["Claude Code","Codex","Gemini","Antigravity","Cursor","Other"];
+      const detected = apiNames.filter(name => name !== "Other").map(name => toolsStatus[name] || {});
+      const runnable = detected.filter(info => info.available && info.runnable).length;
+      const available = detected.filter(info => info.available !== false).length;
+      qs("toolsRunnableCount").textContent = `${runnable}/${detected.length}`;
+      qs("toolsRunnableHint").textContent = `${available} 个工具可见，${runnable} 个可后台调度`;
+      qs("toolRows").innerHTML = names.map((name,i) => {
+        const info = toolsStatus[apiNames[i]] || {};
+        const ok = info.available !== false;
+        const acp = info.acp_enabled ? `<span class="pill blue-tag">ACP</span>` : "";
+        return `<tr><td>${esc(name)} ${apiNames[i] !== "Other" ? `<span class="pill">${esc(apiNames[i])}</span>${acp}` : ""}</td><td><span class="service-dot">●</span>${ok ? "正常" : "缺失"}</td><td>${quotaHtml(info)}</td><td>${["92%","89%","99%","100%","96%","-"][i]}</td><td>${i === 5 ? "09:36" : "09:3" + i}</td></tr>`;
+      }).join("");
+      renderAcpStatus();
+    }
+
+    function renderAcpStatus(){
+      const scripts = acpStatus.scripts || {};
+      const agent = (scripts.agent || {});
+      const tools = acpStatus.tools || {};
+      const connected = ["Cursor","Antigravity","Claude Code","Codex","Gemini"].filter(name => {
+        const tool = tools[name] || {};
+        const info = toolsStatus[name] || {};
+        return tool.configured || info.acp_enabled;
+      }).length;
+      qs("toolsAcpSummary").textContent = agent.executable ? `${connected}/5` : "未接入";
+      qs("toolsAcpHint").textContent = agent.executable ? (acpStatus.ok ? "互通正常" : "已接入，需体检") : "等待 ACP Agent";
+      qs("acpStatusPill").textContent = agent.executable ? (acpStatus.ok ? "互通正常" : "已接入，需体检") : "未接入";
+      qs("acpStatusPill").className = `pill ${agent.executable ? (acpStatus.ok ? "p-green" : "p-orange") : "p-red"}`;
+      const names = ["Cursor","Antigravity","Claude Code","Codex","Gemini"];
+      qs("acpToolRows").innerHTML = names.map(name => {
+        const tool = tools[name] || {};
+        const info = toolsStatus[name] || {};
+        const ok = tool.configured || info.acp_enabled;
+        return `<div class="acp-tool"><b>${esc(name)}</b><span class="${ok ? "ok" : ""}">${ok ? "ACP 已连接" : "等待配置"}</span><span>${esc(tool.target || info.acp_target || "-")}</span></div>`;
+      }).join("");
+      renderTokenRouting();
+    }
+
+    function renderTokenRouting(){
+      const current = tokenRouting.current || {};
+      const chain = current.pipeline || [];
+      qs("toolsRoutingCount").textContent = `${chain.length || 0} 步`;
+      qs("toolsRoutingHint").textContent = current.reason || "等待策略生成";
+      qs("tokenRoutingChain").innerHTML = chain.map(step => `<span class="pill blue-tag">${esc(step.tool)} · ${esc(step.role || "")}</span>`).join(" <span>→</span> ") || `<span class="pill">等待策略</span>`;
+      qs("tokenRoutingReason").textContent = current.reason || "按任务类型自动生成最小上下文链路";
+    }
+
+    function renderCommandCenter(){
+      const rows = commandCenter.next_actions || [];
+      qs("opsRows").innerHTML = rows.map(r => `<tr><td><span class="pill ${r.level === "P0" ? "p-red" : r.level === "P1" ? "p-orange" : "p-green"}">${esc(r.level)}</span></td><td>${esc(r.title)}</td><td>${esc(r.action)}</td></tr>`).join("") || `<tr><td colspan="3">暂无运营动作</td></tr>`;
+    }
+    function renderDecisions(){
+      qs("decisionRows").innerHTML = (decisions || []).slice(0,8).map(d => `<tr><td>${esc(d.created_at)}</td><td>${esc(d.project)}</td><td>${esc(d.decision)}</td></tr>`).join("") || `<tr><td colspan="3">暂无决策日志</td></tr>`;
+    }
+
+    function renderReports(){
+      const total = tasks.length;
+      const done = tasks.filter(t => t.status === "已完成").length;
+      const review = tasks.filter(t => effectiveTaskStatus(t) === "待人工审查").length;
+      const failed = tasks.filter(t => ["failed","unsupported"].includes(t.execution_state)).length;
+      const running = tasks.filter(t => t.status === "AI执行中").length;
+      const todo = tasks.filter(t => t.status === "待分配").length;
+      qs("reportTotalTasks").textContent = total;
+      qs("reportDoneTasks").textContent = done;
+      qs("reportFailedTasks").textContent = failed;
+      qs("reportReviewTasks").textContent = review;
+      const rows = [
+        ["待处理", todo, "尚未进入 AI 调度的任务"],
+        ["AI 执行中", running, "正在推进或等待执行结果的任务"],
+        ["待人工审查", review, "CEO 需要做关键验收决策"],
+        ["已完成", done, "已通过人工审查并闭环"],
+        ["调度失败", failed, "需要重新登录工具、改派或重试"],
+        ["运营动作", (commandCenter.next_actions || []).length, "指挥台生成的下一步动作"],
+      ];
+      qs("reportRows").innerHTML = rows.map(r => `<tr><td>${esc(r[0])}</td><td><b>${esc(r[1])}</b></td><td>${esc(r[2])}</td></tr>`).join("");
+    }
+
+    function renderAnalytics(){
+      const total = tasks.length;
+      const done = tasks.filter(t => t.status === "已完成").length;
+      const doneRate = total ? Math.round(done / total * 100) : 0;
+      const governance = projects.length ? Math.round(projects.reduce((sum,p) => sum + (p.governance_score || 0), 0) / projects.length) : 0;
+      const runnableTools = Object.values(toolsStatus || {}).filter(info => info.available && info.runnable).length;
+      const gitRepos = repositories.filter(repo => repo.is_git).length;
+      const cleanRepos = repositories.filter(repo => repo.is_git && !repo.dirty).length;
+      const repoHealth = gitRepos ? Math.round(cleanRepos / gitRepos * 100) : 0;
+      qs("analyticsGovernance").textContent = governance;
+      qs("analyticsGovernanceBar").style.width = `${governance}%`;
+      qs("analyticsDoneRate").textContent = `${doneRate}%`;
+      qs("analyticsDoneBar").style.width = `${doneRate}%`;
+      qs("analyticsRunnableTools").textContent = runnableTools;
+      qs("analyticsToolHint").textContent = `${Object.keys(toolsStatus || {}).length} 个工具已检测`;
+      qs("analyticsRepoHealth").textContent = `${repoHealth}%`;
+      qs("analyticsRepoHint").textContent = `${cleanRepos}/${gitRepos} 个 Git 仓库干净`;
+      const statusRows = Object.entries(statusMap).map(([status]) => {
+        const count = tasks.filter(t => t.status === status).length;
+        const pct = total ? Math.round(count / total * 100) : 0;
+        return [status, count, pct];
+      });
+      qs("analyticsBars").innerHTML = statusRows.map(([label,count,pct]) => `<div class="bar-row"><span>${esc(label)}</span><div class="bar"><span style="width:${pct}%"></span></div><b>${count}</b></div>`).join("");
+    }
+
+    function renderSettings(){
+      const runtime = healthStatus.runtime_config || {};
+      const paths = healthStatus.paths || {};
+      const launchd = healthStatus.launchd || {};
+      const toolSummary = Object.entries(toolsStatus || {}).map(([name, info]) => `${name}: ${info.available ? (info.runnable ? "可调度" : "受限") : "缺失"}`).join("\n") || "暂无工具状态";
+      qs("settingDispatchTimeout").value = appSettings.dispatch_timeout_seconds || runtime.dispatch_timeout_seconds || 1800;
+      qs("settingRefreshSeconds").value = appSettings.dashboard_refresh_seconds || 15;
+      qs("settingDefaultTaskType").value = appSettings.default_task_type || "fullstack";
+      qs("settingDefaultAI").value = appSettings.default_assignee_ai || "Other";
+      qs("settingAutoRoute").checked = appSettings.auto_route_new_tasks !== false;
+      const routingSummary = Object.entries(routingRules || {}).map(([type, info]) => `${taskTypeLabel[type] || type} -> ${info.tool}`).join("\n") || "暂无路由规则";
+      const runnableTools = Object.values(toolsStatus || {}).filter(info => info.available && info.runnable).length;
+      qs("settingsSummary").innerHTML = [
+        ["调度超时", `${appSettings.dispatch_timeout_seconds || runtime.dispatch_timeout_seconds || 1800}s`, "单任务自动执行上限"],
+        ["刷新周期", `${appSettings.dashboard_refresh_seconds || 15}s`, "看板自动刷新"],
+        ["可调度 AI", `${runnableTools}/${Object.keys(toolsStatus || {}).length}`, "当前可后台执行工具"],
+      ].map(item => `<div class="settings-summary-item"><span>${esc(item[0])}</span><b>${esc(item[1])}</b><span>${esc(item[2])}</span></div>`).join("");
+      qs("settingsDiagnostics").open = settingsDiagnosticsOpen;
+      const rows = [
+        ["服务状态", launchd.loaded ? `已加载 PID ${launchd.pid || "-"}` : "未加载"],
+        ["访问地址", `http://${runtime.host || "127.0.0.1"}:${runtime.port || "5050"}`],
+        ["调度超时", `${runtime.dispatch_timeout_seconds || "-"} 秒`],
+        ["刷新周期", `${appSettings.dashboard_refresh_seconds || 15} 秒`],
+        ["项目目录", healthStatus.company_dir_in_use || "-"],
+        ["pm 脚本", (healthStatus.pm_script || {}).exists ? (healthStatus.pm_script || {}).path : "缺失"],
+        ["目录权限", `~/company: ${(paths.safe_company || {}).accessible ? "可访问" : "受限"}\nDesktop/company: ${(paths.desktop_company || {}).accessible ? "可访问" : "受限"}`],
+        ["AI 工具", toolSummary],
+        ["路由规则", routingSummary],
+      ];
+      qs("settingsRows").innerHTML = rows.map(r => `<div class="settings-item"><span>${esc(r[0])}</span><div class="settings-code">${esc(r[1])}</div></div>`).join("");
+    }
+
+    function renderRepositories(){
+      const rows = onlyDirtyRepos ? repositories.filter(repo => repo.dirty) : repositories;
+      visibleRepositories = rows;
+      qs("repoTotalCount").textContent = repoCounts.total || repositories.length || 0;
+      qs("repoGitCount").textContent = repoCounts.git || repositories.filter(repo => repo.is_git).length || 0;
+      qs("repoDirtyCount").textContent = repoCounts.dirty || repositories.filter(repo => repo.dirty).length || 0;
+      qs("repoNoGitCount").textContent = repoCounts.not_git || repositories.filter(repo => !repo.is_git).length || 0;
+      qs("repoCountPill").textContent = `${rows.length} / ${repositories.length} 个仓库`;
+      qs("dirtyRepoToggle").textContent = onlyDirtyRepos ? "显示全部" : "仅看变更";
+      const focus = rows.find(repo => repo.dirty) || rows.find(repo => repo.is_git) || rows[0];
+      const dirtyCount = repositories.filter(repo => repo.dirty).length;
+      const remoteCount = repositories.filter(repo => repo.remote).length;
+      const changedTotal = repositories.reduce((sum, repo) => sum + (Number(repo.changed_count) || 0), 0);
+      const noGitCount = repositories.filter(repo => !repo.is_git).length;
+      const nextAction = dirtyCount
+        ? `优先处理 ${dirtyCount} 个有变更仓库，查看 diff 后决定提交或回滚。`
+        : (noGitCount ? `有 ${noGitCount} 个目录未初始化 Git，可先初始化再纳入管控。` : "所有仓库当前干净，可按需拉取最新代码。");
+      qs("repoOps").innerHTML = focus ? `
+        <div class="repo-focus">
+          <h4>当前关注仓库</h4>
+          <div class="repo-focus-title"><b>${esc(focus.name)}</b>${focus.is_git ? (focus.dirty ? `<span class="pill p-red">${focus.changed_count} 项变更</span>` : `<span class="pill p-green">干净</span>`) : `<span class="pill p-orange">未初始化</span>`}</div>
+          <div class="repo-path-line">${esc(focus.path || "-")}</div>
+          <div class="project-insight-meta"><span class="pill blue-tag">${esc(focus.branch || "无分支")}</span><span class="pill">${esc(focus.last_commit || "暂无提交")}</span></div>
+          <div class="repo-actions">${focus.is_git ? `<button onclick="repoAction(${visibleRepositories.indexOf(focus)}, 'status')">状态</button><button onclick="repoAction(${visibleRepositories.indexOf(focus)}, 'diff')">变更</button><button class="primary-mini" onclick="repoAction(${visibleRepositories.indexOf(focus)}, 'pull')">拉取</button>` : `<button class="primary-mini" onclick="repoAction(${visibleRepositories.indexOf(focus)}, 'init')">初始化</button>`}</div>
+        </div>
+        <div class="repo-next">
+          <h4>仓库运维建议</h4>
+          <div class="repo-mini-grid"><div class="repo-mini"><b>${changedTotal}</b><span>变更项</span></div><div class="repo-mini"><b>${remoteCount}</b><span>有远端</span></div><div class="repo-mini"><b>${noGitCount}</b><span>未初始化</span></div></div>
+          <p style="margin:0;color:#64748b;font-size:12px;line-height:1.55">${esc(nextAction)}</p>
+        </div>` : `<div class="repo-focus"><h4>当前关注仓库</h4><p style="margin:0;color:#64748b;font-size:12px">暂无仓库数据</p></div>`;
+      qs("repoRows").innerHTML = rows.map((repo, idx) => {
+        const status = !repo.is_git ? `<span class="pill p-orange">未初始化</span>` : (repo.dirty ? `<span class="pill p-red">${repo.changed_count} 项变更</span>` : `<span class="pill p-green">干净</span>`);
+        const branch = repo.branch ? `<span class="pill blue-tag">${esc(repo.branch)}</span>` : "-";
+        const actions = repo.is_git
+          ? `<button onclick="repoAction(${idx}, 'status')">状态</button><button onclick="repoAction(${idx}, 'diff')">变更</button><button onclick="repoAction(${idx}, 'log')">日志</button><button onclick="repoAction(${idx}, 'stage_all')">暂存</button><button onclick="repoAction(${idx}, 'commit')">提交</button><button onclick="repoAction(${idx}, 'push')">推送</button><button class="primary-mini" onclick="repoAction(${idx}, 'pull')">拉取</button>`
+          : `<button class="primary-mini" onclick="repoAction(${idx}, 'init')">初始化</button>`;
+        const remoteHint = repo.remote ? `<span class="pill blue-tag">远端</span>` : (repo.error ? `<span class="pill p-orange">远端异常</span>` : "");
+        return `<tr>
+          <td><div class="project-name"><b>${esc(repo.name)}</b><span class="project-path">${esc(repo.path)}</span><div class="task-meta">${remoteHint}</div></div></td>
+          <td>${branch}</td>
+          <td>${status}</td>
+          <td>${esc(repo.last_commit || "暂无提交")}<br><span class="project-path">${esc(repo.last_commit_at || "")}</span></td>
+          <td><div class="repo-actions">${actions}</div></td>
+        </tr>`;
+      }).join("") || `<tr><td colspan="5">暂无仓库数据</td></tr>`;
+    }
+
+    function boardSummary(rows){
+      if (!rows.length) return "暂无任务";
+      const p0 = rows.filter(t => t.priority === "P0").length;
+      const failed = rows.filter(t => isReworkTask(t)).length;
+      const latest = rows[0]?.title || "";
+      return `${rows.length} 个任务${p0 ? ` · P0 ${p0}` : ""}${failed ? ` · 回退 ${failed}` : ""}${latest ? ` · 最新：${latest}` : ""}`;
+    }
+    function toggleBoardColumn(status){
+      openBoardFloat(status);
+    }
+    function setBoardCollapsed(collapsed){
+      if (collapsed) closeBoardFloat();
+      else openBoardFloat("待分配");
+    }
+    function boardBriefHtml(status, rows){
+      if (!rows.length) return `<div class="brief-empty">暂无任务</div>`;
+      const p0 = rows.filter(t => t.priority === "P0").length;
+      const failed = rows.filter(t => isReworkTask(t)).length;
+      const latest = rows[0];
+      const p = taskPercent(latest);
+      const priClass = latest.priority === "P0" ? "p-red" : (latest.priority === "P1" ? "p-orange" : "p-green");
+      const latestMeta = `<div class="task-meta"><span class="pill blue-tag">${esc(latest.project)}</span><span>${esc(taskTypeLabel[latest.task_type] || "全栈研发")}</span><span>${esc(latest.assignee_ai)}</span><span class="pill ${priClass}">${esc(latest.priority)}</span></div>`;
+      const progress = status === "AI执行中" ? `<div class="progress-pair" style="width:100%;margin-top:2px"><span class="progress" style="width:auto;flex:1"><span style="width:${p}%"></span></span><span class="progress-num">${p}%</span></div>` : "";
+      const alert = failed ? `<div class="task-failure"><b>回退原因</b><span>${esc(taskFailureReason(rows.find(t => isReworkTask(t))))}</span></div>` : "";
+      return `<div class="board-brief">
+        <div class="brief-stats">
+          <div class="brief-stat"><b>${rows.length}</b><span>总任务</span></div>
+          <div class="brief-stat"><b>${p0}</b><span>P0</span></div>
+          <div class="brief-stat"><b>${failed}</b><span>回退</span></div>
+        </div>
+        <div class="brief-latest ${failed ? "brief-alert" : ""}" onclick="selectTask(${latest.id})">
+          <div class="brief-latest-title">最新：${esc(latest.title)}</div>
+          ${latestMeta}
+          ${progress}
+        </div>
+        ${alert}
+      </div>`;
+    }
+    function taskCardHtml(t, compact=false){
+      const p = taskPercent(t);
+      const taskStatus = effectiveTaskStatus(t);
+      const priClass = t.priority === "P0" ? "p-red" : (t.priority === "P1" ? "p-orange" : "p-green");
+      const rework = isReworkTask(t);
+      const failure = rework && !compact ? `<div class="task-failure"><b>回退待处理</b><span>${esc(taskFailureReason(t))}</span></div>` : "";
+      return `<article class="task ${selectedTaskId === t.id ? "active" : ""} ${rework ? "rework" : ""}" onclick="selectTask(${t.id});closeBoardFloat()"><div class="task-title">${esc(t.title)}</div><div class="task-meta"><span class="pill blue-tag">${esc(t.project)}</span><span>${esc(taskTypeLabel[t.task_type] || "全栈研发")}</span><span>${esc(t.assignee_ai)}</span><span class="pill ${priClass}">${esc(t.priority)}</span>${rework ? `<span class="pill p-red">回退</span>` : ""}</div>${failure}${taskStatus === "AI执行中" ? `<div class="progress-pair" style="width:100%;margin-top:9px"><span class="progress" style="width:auto;flex:1"><span style="width:${p}%"></span></span><span class="progress-num">${p}%</span></div>` : ""}<div class="task-bottom"><span>${taskStatus === "已完成" ? "✓" : ""}</span><span>${esc(t.due_at || t.updated_at || "")}</span></div></article>`;
+    }
+    function openBoardFloat(status){
+      boardFloatStatus = status;
+      renderBoardFloat();
+      qs("boardFloatMask").classList.add("show");
+    }
+    function closeBoardFloat(event){
+      if (event && event.target !== qs("boardFloatMask")) return;
+      qs("boardFloatMask").classList.remove("show");
+      boardFloatStatus = null;
+    }
+    function renderBoardFloat(){
+      if (!boardFloatStatus) return;
+      const rows = tasks.filter(t => effectiveTaskStatus(t) === boardFloatStatus);
+      const titles = {"待分配":"待处理任务","AI执行中":"进行中任务","待人工审查":"待评审任务","已完成":"已完成任务"};
+      qs("boardFloatTitle").textContent = titles[boardFloatStatus] || boardFloatStatus;
+      qs("boardFloatCount").textContent = rows.length;
+      qs("boardFloatSummary").textContent = boardSummary(rows);
+      qs("boardFloatList").innerHTML = rows.map(t => taskCardHtml(t)).join("") || `<div class="brief-empty">暂无任务</div>`;
+    }
+    function renderBoard(){
+      Object.values(statusMap).forEach(([colId,countId,wrapId,toggleId,summaryId]) => { qs(colId).innerHTML = ""; qs(countId).textContent = "0"; qs(summaryId).textContent = "暂无任务"; qs(wrapId).classList.remove("collapsed"); qs(toggleId).textContent = "收起"; });
+      for (const [status, [colId, countId]] of Object.entries(statusMap)) {
+        const rows = tasks.filter(t => effectiveTaskStatus(t) === status);
+        const [, , wrapId, toggleId, summaryId] = statusMap[status];
+        qs(countId).textContent = rows.length;
+        qs(summaryId).textContent = boardSummary(rows);
+        qs(wrapId).classList.add("collapsed");
+        qs(toggleId).textContent = "展开";
+        qs(colId).innerHTML = boardBriefHtml(status, rows);
+      }
+      renderBoardFloat();
+    }
+    function selectTask(id){ selectedTaskId = id; renderBoard(); renderDetail(); }
+    function renderDetail(){
+      const t = currentTask();
+      if (!t) return;
+      selectedTaskId = t.id;
+      const p = taskPercent(t);
+      qs("detailTitle").textContent = t.title;
+      qs("detailTags").innerHTML = `<span class="pill blue-tag">${esc(t.project)}</span> <span class="pill ${t.priority === "P0" ? "p-red" : t.priority === "P1" ? "p-orange" : "p-green"}">${esc(t.priority)}</span> <span class="pill">#T-${String(t.id).padStart(6,"0")}</span>`;
+      qs("detailStatus").textContent = effectiveTaskStatus(t) || "-";
+      qs("detailAI").textContent = t.assignee_ai || "-";
+      qs("detailTaskType").textContent = taskTypeLabel[t.task_type] || t.task_type || "-";
+      qs("detailCreated").textContent = t.created_at || "-";
+      qs("detailDue").textContent = t.due_at || "-";
+      qs("editAcceptance").value = t.acceptance_criteria || "";
+      qs("editAIInstruction").value = t.ai_instruction || "";
+      qs("editLockedScope").value = t.locked_scope || "";
+      qs("editExpectedOutput").value = t.expected_output || "";
+      qs("editReviewComment").value = t.review_comment || "";
+      qs("detailRoutingReason").textContent = t.routing_reason || "尚未执行智能路由";
+      const failureReason = taskFailureReason(t);
+      qs("detailFailureBox").textContent = failureReason || "-";
+      qs("detailFailureField").style.display = failureReason ? "grid" : "none";
+      qs("detailPercent").textContent = `${p}%`;
+      qs("detailProgressNum").textContent = `${p}%`;
+      qs("detailProgress").style.width = `${p}%`;
+      const logEl = qs("detailLog");
+      logEl.textContent = taskLogPreview(t);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    async function refreshSelectedTaskDetail(){
+      if (!selectedTaskId) return;
+      const existing = tasks.find(t => t.id === selectedTaskId);
+      if (!isLiveTask(existing)) return;
+      try {
+        const fresh = await fetchJSON(`/api/tasks/${selectedTaskId}`);
+        const idx = tasks.findIndex(t => t.id === fresh.id);
+        if (idx >= 0) tasks[idx] = fresh; else tasks.unshift(fresh);
+        renderBoard();
+        renderDetail();
+      } catch (_) {}
+    }
+
+    async function loadAll(){
+      try {
+        const q = qs("taskSearch")?.value || "";
+        const order = qs("taskSort")?.value || "updated_at";
+        const [proj, summary, tools, health, taskRows, brief, ops, decisionRows, settingsResp, repoResp, reportResp, acpResp, tokenResp] = await Promise.all([
+          fetchJSON("/api/projects"), fetchJSON("/api/dashboard-summary"), fetchJSON("/api/tools/status"), fetchJSON("/api/health"),
+          fetchJSON(`/api/tasks?${new URLSearchParams({ q, order_by: order }).toString()}`), fetchJSON("/api/daily-brief"),
+          fetchJSON("/api/operations/command-center"), fetchJSON("/api/decision-logs?limit=8"), fetchJSON("/api/settings"), fetchJSON("/api/repositories"),
+          fetchJSON("/api/reports/operations"), fetchJSON("/api/acp/summary"), fetchJSON("/api/acp/token-routing")
+        ]);
+        projects = proj.projects || [];
+        archivedProjects = proj.archived_projects || [];
+        toolsStatus = tools || {};
+        healthStatus = health || {};
+        tasks = taskRows || [];
+        briefData = brief || {};
+        commandCenter = ops || {};
+        decisions = decisionRows || [];
+        appSettings = (settingsResp || {}).settings || {};
+        routingRules = (settingsResp || {}).routing_rules || {};
+        repositories = (repoResp || {}).repositories || [];
+        repoCounts = (repoResp || {}).counts || {};
+        operationsReport = reportResp || {};
+        acpStatus = acpResp || {};
+        tokenRouting = tokenResp || {};
+        if (selectedTaskId && !tasks.some(t => t.id === selectedTaskId)) selectedTaskId = null;
+        renderKpis(summary || {});
+        renderRisks();
+        renderProjects();
+        renderTools();
+        renderCommandCenter();
+        renderDecisions();
+        renderReports();
+        renderSettings();
+        renderRepositories();
+        renderAnalytics();
+        applySettingsToQuickCreate();
+        scheduleAutoRefresh();
+        renderBoard();
+        renderDetail();
+      } catch (e) { toast(`加载失败：${e.message || e}`); }
+    }
+
+    async function createTask(){
+      const title = qs("newTitle").value.trim();
+      if (!title) { toast("请输入任务名称"); return; }
+      const payload = { title, project: qs("newProject").value, assignee_ai: qs("newAI").value, priority: newPriority, status: "待分配", due_at: qs("newDueAt").value.trim(), task_type: qs("newTaskType").value, ai_instruction: qs("newAIInstruction").value.trim(), locked_scope: qs("newLockedScope").value.trim(), expected_output: qs("newExpectedOutput").value.trim(), auto_route: qs("newAutoRoute").checked };
+      const created = await fetchJSON("/api/tasks", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+      selectedTaskId = created.id;
+      ["newTitle","newDueAt","newAIInstruction","newLockedScope","newExpectedOutput"].forEach(id => qs(id).value = "");
+      toast("任务已创建");
+      if (qs("autoDispatch").checked) await dispatchTask();
+      await loadAll();
+    }
+    async function saveTask(){
+      const t = currentTask(); if (!t) return;
+      await fetchJSON(`/api/tasks/${t.id}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ acceptance_criteria: qs("editAcceptance").value.trim(), ai_instruction: qs("editAIInstruction").value.trim(), locked_scope: qs("editLockedScope").value.trim(), expected_output: qs("editExpectedOutput").value.trim(), review_comment: qs("editReviewComment").value.trim() })});
+      toast("调整已保存");
+      await loadAll();
+    }
+    async function routeTask(){ const t=currentTask(); if(!t){toast("请先选择任务");return;} const res=await fetchJSON(`/api/tasks/${t.id}/route`,{method:"POST"}); toast(`已路由到 ${res.tool}`); await loadAll(); }
+    async function dispatchTask(){ const t=currentTask(); if(!t){toast("请先选择任务");return;} if(t.status==="已完成"){toast("已完成任务不应重复调度");return;} await fetchJSON(`/api/tasks/${t.id}/dispatch`,{method:"POST"}); toast("调度已开始"); await loadAll(); }
+    async function retryTask(){ const t=currentTask(); if(!t){toast("请先选择任务");return;} await fetchJSON(`/api/tasks/${t.id}/retry`,{method:"POST"}); toast("已重新调度"); await loadAll(); }
+    async function flagTask(){
+      const t=currentTask(); if(!t){toast("请先选择任务");return;}
+      await fetchJSON(`/api/tasks/${t.id}`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ priority:"P0" })});
+      toast("已标为高优先级");
+      await loadAll();
+    }
+    function locateTaskProject(){
+      const t=currentTask(); if(!t){toast("请先选择任务");return;}
+      selectedProjectName = t.project;
+      renderProjects();
+      qs("projects").scrollIntoView({behavior:"smooth", block:"center"});
+      toast(`已定位项目：${t.project}`);
+    }
+    function clearTaskSelection(){
+      selectedTaskId = null;
+      renderBoard();
+      qs("detailTitle").textContent = "选择任务查看详情";
+      qs("detailTags").innerHTML = "";
+      ["detailStatus","detailAI","detailTaskType","detailCreated","detailDue"].forEach(id => qs(id).textContent = "-");
+      ["editAcceptance","editAIInstruction","editLockedScope","editExpectedOutput","editReviewComment"].forEach(id => qs(id).value = "");
+      qs("detailRoutingReason").textContent = "-";
+      qs("detailFailureBox").textContent = "-";
+      qs("detailFailureField").style.display = "none";
+      qs("detailPercent").textContent = "0%";
+      qs("detailProgressNum").textContent = "0%";
+      qs("detailProgress").style.width = "0%";
+      qs("detailLog").textContent = "暂无日志";
+    }
+    async function reviewTask(decision){
+      const t=currentTask(); if(!t) return;
+      if(effectiveTaskStatus(t) !== "待人工审查"){ toast("只有待评审任务可提交评审"); return; }
+      const comment=qs("editReviewComment").value.trim();
+      if(decision === "reject" && !comment){ toast("拒绝时请填写调整意见"); return; }
+      await fetchJSON(`/api/tasks/${t.id}/review`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ decision, comment })});
+      toast(decision === "approve" ? "评审通过" : "已拒绝并重开");
+      await loadAll();
+    }
+    async function archiveProjectByName(name){ await fetchJSON(`/api/projects/${encodeURIComponent(name)}/archive`, { method:"POST" }); toast("项目已归档"); await loadAll(); }
+    async function createProject(){
+      const name = qs("newProjectName").value.trim();
+      if(!name){ toast("请输入项目名"); return; }
+      await fetchJSON("/api/projects", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ name })});
+      qs("newProjectName").value = "";
+      toast("项目已创建");
+      await loadAll();
+    }
+    async function unarchiveSelectedProject(){
+      const name = selectedProjectName || archivedProjects[0];
+      if(!name){ toast("没有可恢复项目"); return; }
+      await fetchJSON(`/api/projects/${encodeURIComponent(name)}/unarchive`, { method:"POST" });
+      selectedProjectName = name;
+      toast("项目已恢复");
+      await loadAll();
+    }
+    async function deleteSelectedProject(){
+      const name = selectedProjectName;
+      if(!name){ toast("请先选择项目"); return; }
+      if(!confirm(`确认删除项目 ${name} ?`)) return;
+      await fetchJSON(`/api/projects/${encodeURIComponent(name)}`, { method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ confirm_name:name })});
+      selectedProjectName = null;
+      toast("项目已删除");
+      await loadAll();
+    }
+    async function loadCommandCenter(){ commandCenter = await fetchJSON("/api/operations/command-center"); renderCommandCenter(); toast("指挥台已刷新"); }
+    async function loadDecisions(){ decisions = await fetchJSON("/api/decision-logs?limit=8"); renderDecisions(); toast("决策日志已刷新"); }
+    async function createDecisionLog(){
+      const project = qs("decisionProject").value;
+      const decision = qs("decisionText").value.trim();
+      const reason = qs("decisionReason").value.trim();
+      if (!project || !decision) { toast("请填写项目和决策内容"); return; }
+      await fetchJSON("/api/decision-logs", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ project, decision, reason })});
+      qs("decisionText").value = ""; qs("decisionReason").value = "";
+      await loadAll();
+    }
+    function buildOpsReport(){
+      return Object.keys(operationsReport || {}).length ? operationsReport : {
+        generated_at: new Date().toISOString(),
+        projects: { active: projects.length, archived: archivedProjects.length },
+        tasks: {
+          total: tasks.length,
+          todo: tasks.filter(t => t.status === "待分配").length,
+          running: tasks.filter(t => t.status === "AI执行中").length,
+          review: tasks.filter(t => effectiveTaskStatus(t) === "待人工审查").length,
+          done: tasks.filter(t => t.status === "已完成").length,
+          failed: tasks.filter(t => ["failed","unsupported"].includes(t.execution_state)).length,
+        },
+        command_center: commandCenter,
+        recent_decisions: decisions,
+        health: healthStatus,
+        tools: toolsStatus,
+      };
+    }
+    function downloadOpsReport(){
+      const content = JSON.stringify(buildOpsReport(), null, 2);
+      const blob = new Blob([content], {type:"application/json;charset=utf-8"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ceo-console-report-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast("运营报表已生成");
+    }
+    async function copySettings(){
+      const content = JSON.stringify({ health: healthStatus, tools: toolsStatus }, null, 2);
+      try {
+        await navigator.clipboard.writeText(content);
+        toast("诊断信息已复制");
+      } catch (_) {
+        qs("detailLog").textContent = content;
+        toast("无法写入剪贴板，已放到右侧日志");
+      }
+    }
+    async function saveSettings(){
+      const payload = {
+        dispatch_timeout_seconds: Number(qs("settingDispatchTimeout").value || 1800),
+        dashboard_refresh_seconds: Number(qs("settingRefreshSeconds").value || 15),
+        default_task_type: qs("settingDefaultTaskType").value,
+        default_assignee_ai: qs("settingDefaultAI").value,
+        auto_route_new_tasks: qs("settingAutoRoute").checked,
+      };
+      const res = await fetchJSON("/api/settings", { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
+      appSettings = res.settings || payload;
+      applySettingsToQuickCreate();
+      scheduleAutoRefresh(true);
+      toast("设置已保存");
+      await loadAll();
+    }
+    async function resetSettings(){
+      const res = await fetchJSON("/api/settings/reset", { method:"POST" });
+      appSettings = res.settings || {};
+      applySettingsToQuickCreate();
+      scheduleAutoRefresh(true);
+      toast("已恢复默认设置");
+      await loadAll();
+    }
+    async function refreshTools(){
+      const res = await fetchJSON("/api/settings/refresh-tools", { method:"POST" });
+      toolsStatus = res.tools || {};
+      renderTools();
+      renderSettings();
+      toast("工具状态已重新检测");
+    }
+    async function loadRepositories(){
+      const res = await fetchJSON("/api/repositories");
+      repositories = res.repositories || [];
+      repoCounts = res.counts || {};
+      renderRepositories();
+      toast("代码仓库已刷新");
+    }
+    async function repoAction(index, action){
+      const repo = visibleRepositories[index];
+      if (!repo) { toast("未找到仓库"); return; }
+      if (action === "pull" && !confirm(`确认拉取 ${repo.name} ?\n将执行 git pull --ff-only`)) return;
+      if (action === "push" && !confirm(`确认推送 ${repo.name} ?\n将执行 git push`)) return;
+      let message = "";
+      if (action === "commit") {
+        message = prompt(`提交 ${repo.name} 的变更说明：`, "");
+        if (!message || !message.trim()) { toast("已取消提交"); return; }
+      }
+      try {
+        const res = await fetchJSON("/api/repositories/action", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ path: repo.path, action, message }) });
+        const header = `[${new Date().toLocaleTimeString()}] ${repo.name} · ${res.command || action}`;
+        qs("detailLog").textContent = `${header}\n${res.output || "无输出"}`;
+        qs("detailLog").scrollTop = qs("detailLog").scrollHeight;
+        toast(res.ok ? "Git 操作完成" : "Git 操作失败");
+        await loadRepositories();
+      } catch (e) {
+        qs("detailLog").textContent = `[${new Date().toLocaleTimeString()}] ${repo.name} · ${action}\n${e.message || e}`;
+        toast(`Git 操作失败：${e.message || e}`);
+      }
+    }
+    async function loadAcpStatus(){
+      acpStatus = await fetchJSON("/api/acp/status");
+      renderAcpStatus();
+      toast(acpStatus.ok ? "ACP 五端互通正常" : "ACP 体检完成，请查看状态");
+    }
+    function toggleDirtyRepos(){
+      onlyDirtyRepos = !onlyDirtyRepos;
+      renderRepositories();
+    }
+    function applySettingsToQuickCreate(){
+      if (appSettings.default_task_type) qs("newTaskType").value = appSettings.default_task_type;
+      if (appSettings.default_assignee_ai) qs("newAI").value = appSettings.default_assignee_ai;
+      qs("newAutoRoute").checked = appSettings.auto_route_new_tasks !== false;
+    }
+    function scheduleAutoRefresh(force=false){
+      const seconds = Number(appSettings.dashboard_refresh_seconds || 15);
+      if (refreshTimer && !force) return;
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = setInterval(loadAll, Math.max(5, seconds) * 1000);
+    }
+    function exportTasks(){ window.location.href = "/api/tasks/export"; }
+    function focusCreate(){ qs("newTitle").focus(); qs("newTitle").scrollIntoView({behavior:"smooth", block:"center"}); }
+    function scrollToSection(hash){
+      const target = hash === "#workbench" ? qs("workbench") : document.querySelector(hash);
+      if (!target) return;
+      const topbarHeight = document.querySelector(".topbar")?.offsetHeight || 0;
+      const y = hash === "#workbench" ? 0 : window.scrollY + target.getBoundingClientRect().top - topbarHeight - 10;
+      window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    }
+    function activateNavItem(item){
+      document.querySelectorAll(".nav-item").forEach(x => x.classList.toggle("active", x === item));
+    }
+    function bindFloatingDetails(){
+      const ids = ["toolsDetails","settingsDiagnostics","detailConfig"];
+      const all = () => ids.map(id => qs(id)).filter(Boolean);
+      all().forEach(el => el.addEventListener("toggle", e => {
+        if (e.currentTarget.id === "settingsDiagnostics") settingsDiagnosticsOpen = e.currentTarget.open;
+        if (!e.currentTarget.open) return;
+        all().forEach(other => { if (other !== e.currentTarget) other.open = false; });
+      }));
+      document.addEventListener("click", e => {
+        all().forEach(el => {
+          if (el.open && !el.contains(e.target)) el.open = false;
+        });
+      });
+    }
+    document.querySelectorAll(".nav-item").forEach(item => item.addEventListener("click", e => {
+      e.preventDefault();
+      activateNavItem(item);
+      const hash = item.getAttribute("href") || "#workbench";
+      history.replaceState(null, "", hash);
+      scrollToSection(hash);
+    }));
+    bindFloatingDetails();
+    document.addEventListener("keydown", e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") { e.preventDefault(); loadAll(); } });
+    liveDetailTimer = setInterval(refreshSelectedTaskDetail, 2000);
+    loadAll();
+    scheduleAutoRefresh(true);
+  </script>
+</body>
+</html>
