@@ -61,6 +61,18 @@ CEO_CONSOLE_PORT=5050
 CEO_CONSOLE_DISPATCH_TIMEOUT_SECONDS=1800
 ```
 
+## 源码结构
+
+- `server.py`：兼容启动入口，保持 `python3 server.py` 与旧测试导入方式可用
+- `src/config.py`：路径、环境变量、设置与基础校验
+- `src/db.py`：SQLite 初始化与连接
+- `src/projects.py`：项目扫描、治理评分与 Git 仓库操作
+- `src/tasks.py`：任务查询、状态同步、执行报告模型
+- `src/tools.py`：AI 工具探测、ACP 命令、Token 优先路由
+- `src/dispatch.py`：后台任务执行器与运行日志
+- `src/routes.py`：Flask 页面与 API 路由
+- `src/app.py`：应用组装与模块导出
+
 ## 常驻服务（launchd）
 
 安装并立即启动：
