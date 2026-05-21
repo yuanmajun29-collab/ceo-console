@@ -145,14 +145,14 @@ def test_dashboard_task_close_loop(e2e_server):
         page.wait_for_timeout(400)
 
         page.locator("#colTodo .task", has_text="E2E闭环任务").first.click()
-        page.click("button:has-text('调度执行')")
+        page.click("button:has-text('开始执行')")
         page.wait_for_timeout(300)
         page.locator("#taskCenterSection button:has-text('刷新')").click()
         page.wait_for_timeout(300)
         assert "E2E闭环任务" in page.inner_text("#colReview")
 
         page.fill("#editReviewComment", "E2E自动审查通过")
-        page.click("button:has-text('审查通过')")
+        page.click("button:has-text('通过验收')")
         page.wait_for_timeout(300)
         page.locator("#taskCenterSection button:has-text('刷新')").click()
         page.wait_for_timeout(300)

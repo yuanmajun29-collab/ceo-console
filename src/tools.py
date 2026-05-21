@@ -25,8 +25,13 @@ def tool_candidates(tool_name: str) -> list[str]:
         # For headless dispatch we must prefer OpenClaw CLI over GUI launcher.
         "Antigravity": ["openclaw", "antigravity"],
         "Cursor": ["cursor", "cursor-agent"],
+        "Hermes": ["hermes", "hermes-agent"],
     }
-    return mapping.get(tool_name, [])
+    if tool_name in mapping:
+        return mapping[tool_name]
+    registry = get_acp_agent_registry()
+    target = (registry.get(tool_name) or {}).get("target")
+    return [target, slugify_acp_target(tool_name)] if target else [slugify_acp_target(tool_name)]
 
 
 def resolve_tool_command(tool_name: str) -> str | None:
@@ -36,6 +41,9 @@ def resolve_tool_command(tool_name: str) -> str | None:
         "/usr/bin",
         "/bin",
         str(Path.home() / ".antigravity" / "antigravity" / "bin"),
+        str(Path.home() / ".hermes" / "hermes-agent" / "venv" / "bin"),
+        str(Path.home() / ".hermes" / "hermes-agent"),
+        str(Path.home() / ".hermes" / "bin"),
         str(Path.home() / "Library" / "Python" / "3.9" / "bin"),
     ]
     for c in tool_candidates(tool_name):
@@ -52,7 +60,8 @@ def resolve_tool_command(tool_name: str) -> str | None:
 def build_tool_run_command(tool_name: str, prompt: str) -> tuple[list[str] | None, str | None]:
     acp_scripts = get_acp_scripts()
     acp_agent = acp_scripts["agent"]
-    acp_target = ACP_TOOL_TARGET.get(tool_name)
+    acp_entry = get_acp_agent_registry().get(tool_name) or {}
+    acp_target = acp_entry.get("target") or ACP_TOOL_TARGET.get(tool_name)
     if acp_target and acp_agent["exists"] and acp_agent["executable"]:
         agent_path = acp_agent["path"]
         if tool_name == "Claude Code":
@@ -75,6 +84,12 @@ def build_tool_run_command(tool_name: str, prompt: str) -> tuple[list[str] | Non
             return [agent_path, acp_target, "agent", "--local", "--agent", "main", "--message", prompt, "--json"], None
         if tool_name == "Cursor":
             return None, "Cursor ACP 当前会打开 IDE 交互窗口，不适合后台无头调度。请改用 Claude/Gemini/Antigravity/Codex。"
+        if tool_name == "Hermes":
+            cmd_path = resolve_tool_command(tool_name)
+            if cmd_path:
+                return [cmd_path, "--accept-hooks", "-z", prompt], None
+            return None, "Hermes 已检测到 ACP/Hook 配置，但 hermes 命令不可执行；请把 ~/.hermes/hermes-agent/venv/bin 加入 PATH。"
+        return [agent_path, acp_target, prompt], None
 
     cmd_path = resolve_tool_command(tool_name)
     if not cmd_path:
@@ -94,6 +109,8 @@ def build_tool_run_command(tool_name: str, prompt: str) -> tuple[list[str] | Non
         return [cmd_path, "exec", "--skip-git-repo-check", "--sandbox", "workspace-write", "--color", "never", prompt], None
     if tool_name == "Cursor":
         return None, "Cursor CLI 当前用于打开IDE窗口，不支持稳定的无头自动执行。请改用 Claude/Gemini/Antigravity/Codex。"
+    if tool_name == "Hermes":
+        return [cmd_path, "--accept-hooks", "-z", prompt], None
 
     return [cmd_path, prompt], None
 
@@ -242,13 +259,18 @@ def get_tools_status_cached() -> dict[str, Any]:
     }
     data: dict[str, Any] = {}
     acp_scripts = get_acp_scripts()
-    for tool in ["Cursor", "Antigravity", "Claude Code", "Codex", "Gemini"]:
+    registry = get_acp_agent_registry()
+    for tool, acp_entry in registry.items():
         command = resolve_tool_command(tool)
-        available = command is not None
+        acp_enabled = bool(acp_scripts["agent"]["exists"] and acp_scripts["agent"]["executable"] and acp_entry.get("target"))
+        available = command is not None or acp_enabled
         runnable = False
         reason = None
         if available and command and headless_support.get(tool, True):
             runnable, reason = check_command_runnable(command)
+        elif available and acp_enabled and headless_support.get(tool, True):
+            runnable = True
+            reason = "通过 ACP 动态接入，按通用 Agent 目标调度。"
         elif available and not headless_support.get(tool, True):
             runnable = False
             reason = "该工具当前仅支持交互模式，不支持后台无头自动执行。"
@@ -259,8 +281,11 @@ def get_tools_status_cached() -> dict[str, Any]:
             "candidates": tool_candidates(tool),
             "reason": reason,
             "quota": get_tool_quota(tool),
-            "acp_target": ACP_TOOL_TARGET.get(tool),
-            "acp_enabled": bool(acp_scripts["agent"]["exists"] and acp_scripts["agent"]["executable"] and ACP_TOOL_TARGET.get(tool)),
+            "acp_target": acp_entry.get("target"),
+            "acp_enabled": acp_enabled,
+            "acp_configured": bool(acp_entry.get("configured") or acp_enabled),
+            "dynamic_acp": not bool(acp_entry.get("builtin")),
+            "source": acp_entry.get("source") or "fixed",
         }
 
     _TOOL_STATUS_CACHE["ts"] = now

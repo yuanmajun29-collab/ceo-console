@@ -44,12 +44,11 @@
     .left { min-width:0; display:grid; gap:var(--gap); }
     .right-stack { min-width:0; display:grid; gap:var(--gap); align-content:start; }
     .left > .kpis { order:1; }
-    .left > #risks { order:2; }
+    .left > .governance-row { order:2; }
     .left > #taskCenterSection { order:3; }
     .left > #detail { order:4; }
     .left > #analytics { order:5; }
     .left > .midrow { order:6; }
-    .left > .report-settings-grid { order:7; }
     .kpis { display:grid; grid-template-columns:repeat(7,minmax(148px,1fr)); gap:var(--gap); overflow-x:auto; padding-bottom:2px; }
     .kpi { min-height:68px; background:#fff; border:1px solid var(--line); border-radius:7px; padding:var(--pad-sm) 12px; display:grid; grid-template-columns:minmax(0,1fr) 24px; gap:6px 8px; box-shadow:var(--shadow); align-items:start; }
     .kpi-label { color:#64748b; font-size:12px; line-height:1.2; }
@@ -59,7 +58,11 @@
     .kpi-icon { align-self:start; justify-self:end; width:24px; height:24px; border-radius:6px; display:grid; place-items:center; font-size:13px; color:#fff; opacity:.9; }
     .ico-blue { background:#2563eb; } .ico-green { background:#16a34a; } .ico-orange { background:#f97316; } .ico-red { background:#ef4444; }
     .panel { background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:var(--shadow); overflow:hidden; }
-    .panel,.kpis,.detail,.ops-grid,.report-settings-grid,.analytics-grid,.repo-grid,.right-stack { scroll-margin-top:calc(var(--top-h) + 12px); }
+    .panel,.kpis,.detail,.ops-grid,.analytics-grid,.repo-grid,.right-stack { scroll-margin-top:calc(var(--top-h) + 12px); }
+    .governance-row { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,.85fr); gap:var(--gap); align-items:stretch; }
+    .governance-row > .panel { min-width:0; }
+    .governance-row #projects { order:1; }
+    .governance-row #risks { order:2; }
     .panel-head { min-height:var(--head-h); padding:0 var(--pad); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:var(--inner-gap); flex-wrap:wrap; }
     .panel-title { font-weight:900; }
     .project-head { min-height:0; padding:var(--pad); border-bottom:1px solid var(--line); display:grid; gap:var(--inner-gap); }
@@ -124,6 +127,11 @@
     .risk-grid { display:grid; grid-template-columns:repeat(4,1fr); }
     .risk-card { min-height:88px; padding:var(--pad); border-right:1px solid var(--line2); }
     .risk-card:last-child { border-right:none; }
+    .governance-row #risks .risk-grid { display:flex; grid-template-columns:none; overflow-x:auto; overflow-y:hidden; scroll-behavior:auto; scrollbar-width:thin; }
+    .governance-row #risks .risk-card { flex:0 0 min(300px,86%); min-height:92px; border-right:1px solid var(--line2); border-bottom:none; }
+    .governance-row #risks .risk-card:last-child { border-right:none; }
+    .governance-row #risks .risk-top { margin-bottom:6px; }
+    .governance-row #risks .risk-meta { grid-template-columns:1fr; gap:4px; }
     .risk-top { display:flex; align-items:center; gap:10px; margin-bottom:9px; font-weight:800; font-size:13px; }
     .risk-badge { border-radius:5px; padding:3px 8px; font-size:12px; }
     .high { background:var(--soft-red); color:var(--red); border:1px solid #fecdd3; }
@@ -188,7 +196,6 @@
     .danger { height:30px; border:0; border-radius:4px; background:#dc2626; color:#fff; }
     .success { height:30px; border:0; border-radius:4px; background:#16a34a; color:#fff; }
     .ops-grid { display:contents; }
-    .report-settings-grid { display:grid; grid-template-columns:1fr; gap:var(--gap); }
     .repo-grid,.analytics-grid { display:grid; grid-template-columns:1fr; gap:var(--gap); }
     .metric-strip { padding:var(--pad); display:grid; grid-template-columns:repeat(4,1fr); gap:var(--inner-gap); border-bottom:1px solid var(--line); }
     .mini-metric { border:1px solid var(--line2); border-radius:8px; padding:var(--pad-sm); background:#fbfdff; }
@@ -256,27 +263,45 @@
     .detail-head { height:var(--head-h); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:var(--inner-gap); padding:0 var(--pad); color:#1d4ed8; font-weight:900; }
     .detail-actions { margin-left:auto; display:flex; gap:8px; color:#6b7280; }
     .detail-actions button { border:0; background:transparent; color:#64748b; padding:2px 4px; }
-    .detail-body { padding:var(--pad); display:grid; grid-template-columns:minmax(220px,.8fr) minmax(260px,1fr) minmax(300px,1.1fr); gap:var(--inner-gap); align-items:start; }
-    .detail-title { font-size:15px; font-weight:900; line-height:1.4; }
-    .detail-title,#detailTags { grid-column:1 / -1; }
-    .detail-summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .detail-body { padding:var(--pad); display:grid; grid-template-columns:minmax(320px,2fr) minmax(0,1fr) minmax(0,1fr); grid-template-areas:"log title title" "log tags tags" "log summary summary" "log progress progress" "config route route" ". failure failure"; gap:var(--inner-gap); align-items:start; }
+    .detail-title { grid-area:title; font-size:15px; font-weight:900; line-height:1.4; }
+    #detailTags { grid-area:tags; }
+    .detail-summary-grid { grid-area:summary; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     .kv { display:grid; grid-template-columns:64px 1fr; gap:6px; color:#374151; font-size:12px; align-items:start; }
     .detail-summary-grid .kv { border:1px solid var(--line2); border-radius:6px; background:#fbfdff; padding:8px; grid-template-columns:1fr; gap:3px; }
     .kv span:first-child { color:#6b7280; }
-    .detail-compact { display:grid; gap:10px; }
-    .detail-body > .field { grid-column:2; }
-    .detail-log-block { grid-column:3; min-width:0; }
+    .detail-compact { grid-area:progress; display:grid; gap:10px; }
+    .detail-body > .field { grid-column:auto; }
+    #detailRoutingField { grid-area:route; }
+    #detailFailureField { grid-area:failure; }
+    .detail-log-block { grid-area:log; min-width:0; align-self:start; display:grid; grid-template-rows:auto minmax(0,1fr); height:var(--detail-log-h,190px); min-height:0; }
+    .detail-routing-fold { border:1px solid var(--line); border-radius:7px; background:#fff; position:relative; overflow:visible; }
+    .detail-routing-fold summary { list-style:none; cursor:pointer; padding:9px 12px; display:flex; justify-content:space-between; align-items:center; color:#334155; font-weight:900; font-size:12px; background:#fbfdff; border-radius:7px; }
+    .detail-routing-fold summary::-webkit-details-marker { display:none; }
+    .detail-routing-fold summary::after { content:"查看"; color:#2563eb; font-weight:800; }
+    .detail-routing-fold[open] summary::after { content:"收起"; }
+    .detail-routing-body { display:none; position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:45; padding:10px; background:#fff; border:1px solid var(--line); border-radius:7px; box-shadow:0 16px 40px rgba(15,23,42,.16); }
+    .detail-routing-fold[open] .detail-routing-body { display:block; }
     .detail-config { border:1px solid var(--line); border-radius:7px; background:#fff; overflow:visible; position:relative; }
-    .detail-body > .detail-config { grid-column:1 / -1; }
+    .detail-body > .detail-config { grid-area:config; grid-column:auto; }
     .detail-config summary { list-style:none; cursor:pointer; padding:10px 12px; display:flex; justify-content:space-between; color:#334155; font-weight:900; font-size:12px; background:#fbfdff; }
     .detail-config summary::-webkit-details-marker { display:none; }
     .detail-config summary::after { content:"展开"; color:#2563eb; font-weight:800; }
     .detail-config[open] summary::after { content:"收起"; }
-    .detail-config-body { padding:12px; display:none; gap:10px; position:absolute; left:0; right:0; top:100%; z-index:40; max-height:min(520px,58vh); overflow:auto; background:#fff; border:1px solid var(--line); border-radius:0 0 8px 8px; box-shadow:0 18px 48px rgba(15,23,42,.18); }
+    .detail-config-body { padding:12px; display:none; gap:10px; position:absolute; left:0; right:0; top:100%; z-index:48; max-height:min(520px,58vh); overflow:auto; background:#fff; border:1px solid var(--line); border-radius:0 0 8px 8px; box-shadow:0 18px 48px rgba(15,23,42,.18); }
     .detail-config[open] .detail-config-body { display:grid; }
-    .log { background:#111827; color:#e5e7eb; border-radius:6px; padding:10px; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; min-height:72px; max-height:118px; overflow:auto; }
+    .log { background:#111827; color:#e5e7eb; border-radius:6px; padding:10px; font:11px ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; min-height:0; height:100%; max-height:none; overflow:auto; cursor:zoom-in; }
     .hint-box { border:1px solid var(--line); background:#fbfdff; border-radius:4px; padding:8px; color:#4b5563; font-size:12px; white-space:pre-wrap; max-height:72px; overflow:auto; }
-    .detail-footer { border-top:1px solid var(--line); padding:var(--pad); display:grid; grid-template-columns:minmax(180px,.75fr) minmax(280px,1fr) minmax(220px,.8fr); gap:var(--inner-gap); align-items:center; }
+    .detail-footer { border-top:1px solid var(--line); padding:var(--pad); display:grid; grid-template-columns:minmax(220px,1fr) minmax(260px,1fr); gap:var(--inner-gap); align-items:center; }
+    .action-main,.action-side { display:flex; align-items:center; gap:8px; min-width:0; }
+    .action-main { justify-content:flex-start; }
+    .action-side { justify-content:flex-end; flex-wrap:wrap; }
+    .detail-footer button:disabled { opacity:.55; cursor:not-allowed; }
+    .detail-more-actions { position:relative; }
+    .detail-more-actions summary { list-style:none; height:30px; min-width:64px; border:1px solid var(--line); border-radius:4px; background:#fff; color:#374151; display:grid; place-items:center; cursor:pointer; font-size:12px; }
+    .detail-more-actions summary::-webkit-details-marker { display:none; }
+    .detail-more-actions-body { display:none; position:absolute; right:0; bottom:calc(100% + 6px); z-index:50; min-width:220px; padding:8px; border:1px solid var(--line); border-radius:7px; background:#fff; box-shadow:0 16px 40px rgba(15,23,42,.16); gap:8px; }
+    .detail-more-actions[open] .detail-more-actions-body { display:grid; }
     .button-row { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     .button-row.three { grid-template-columns:1fr 1fr 1fr; }
     .board-float-mask { position:fixed; inset:0; background:rgba(15,23,42,.22); z-index:80; display:none; align-items:center; justify-content:center; padding:28px; }
@@ -287,10 +312,18 @@
     .board-float-head button { margin-left:auto; border:0; background:transparent; color:#64748b; font-size:18px; cursor:pointer; }
     .board-float-summary { padding:10px 14px; border-bottom:1px solid var(--line2); background:#fbfdff; color:#64748b; font-size:12px; }
     .board-float-list { padding:var(--pad); overflow:auto; display:grid; gap:var(--inner-gap); }
+    .log-float-mask { position:fixed; inset:0; background:rgba(15,23,42,.34); z-index:95; display:none; align-items:center; justify-content:center; padding:28px; }
+    .log-float-mask.show { display:flex; }
+    .log-float { width:min(980px,calc(100vw - 56px)); max-height:calc(100vh - 72px); background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 24px 70px rgba(15,23,42,.28); overflow:hidden; display:grid; grid-template-rows:auto minmax(320px,1fr); }
+    .log-float-head { height:46px; padding:0 14px; display:flex; align-items:center; gap:10px; border-bottom:1px solid var(--line); }
+    .log-float-head b { font-size:14px; }
+    .log-float-head button { margin-left:auto; border:0; background:transparent; color:#64748b; font-size:18px; cursor:pointer; }
+    .log-float-content { margin:0; border-radius:0; height:auto; min-height:320px; max-height:calc(100vh - 118px); cursor:text; }
     .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(12px); opacity:0; pointer-events:none; transition:.18s; background:#111827; color:#fff; padding:10px 14px; border-radius:6px; z-index:100; font-size:12px; }
     .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-    @media (max-width:1280px) { .workspace { grid-template-columns:1fr; } .detail { position:static; min-height:auto; } .midrow { grid-template-columns:1fr; } .report-settings-grid { grid-template-columns:1fr; } }
-    @media (max-width:860px) { :root { --side-w:64px; } .brand-text,.nav-text,.sidebar-foot .ver { display:none; } .nav-item { justify-content:center; padding:0; } .badge { position:absolute; right:2px; top:4px; } .risk-grid,.board,.decision-form,.project-tools,.metric-strip,.settings-form,.analytics-cards,.detail-body,.detail-footer { grid-template-columns:1fr; } .detail-title,#detailTags,.detail-body > .field,.detail-log-block,.detail-body > .detail-config { grid-column:1; } .top-meta { display:none; } .title { font-size:15px; } }
+    @media (max-width:1280px) { .workspace { grid-template-columns:1fr; } .detail { position:static; min-height:auto; } .midrow { grid-template-columns:1fr; } }
+    @media (max-width:960px) { .governance-row { grid-template-columns:1fr; } }
+    @media (max-width:860px) { :root { --side-w:64px; } .brand-text,.nav-text,.sidebar-foot .ver { display:none; } .nav-item { justify-content:center; padding:0; } .badge { position:absolute; right:2px; top:4px; } .risk-grid,.board,.decision-form,.project-tools,.metric-strip,.settings-form,.analytics-cards,.detail-body,.detail-footer { grid-template-columns:1fr; } .detail-body { grid-template-areas:"title" "tags" "summary" "progress" "route" "failure" "log" "config"; } .detail-title,#detailTags,.detail-body > .field,.detail-log-block,.detail-body > .detail-config { grid-column:1; } .top-meta { display:none; } .title { font-size:15px; } }
   </style>
 </head>
 <body>
@@ -348,13 +381,7 @@
               <div class="kpi"><div><div class="kpi-label">本地存储</div><div class="kpi-value">61%</div></div><div class="kpi-icon ico-blue">◉</div><div class="kpi-foot">可用 <b>94.2 GB</b></div></div>
             </section>
 
-            <section class="panel" id="risks">
-              <div class="panel-head"><span class="panel-title">风险与提醒</span><div class="tabs"><span class="tab active">全部 <b id="riskTotalTab">0</b></span><span>高风险 <b id="riskHighTab">0</b></span><span>中风险 <b id="riskMidTab">0</b></span><span>低风险 0</span></div><button class="panel-link">查看全部 ›</button></div>
-              <div class="risk-grid" id="riskGrid"></div>
-            </section>
-
-            <section class="midrow">
-              <div class="midcol">
+            <section class="governance-row" aria-label="项目治理与风险提醒">
                 <div class="panel" id="projects">
                   <div class="project-head">
                     <div class="project-head-top"><span class="panel-title">项目治理概览</span><span class="pill blue-tag" id="projectCountPill">0 个项目</span><button class="panel-link" onclick="exportTasks()">导出任务 ›</button></div>
@@ -368,6 +395,15 @@
                   </div>
                   <div class="project-table-wrap"><table><thead><tr><th>项目</th><th>阶段/进度</th><th>治理资产</th><th>任务(待/总)</th><th>风险</th><th>操作</th></tr></thead><tbody id="projectsBody"></tbody></table></div>
                 </div>
+
+                <section class="panel" id="risks">
+                  <div class="panel-head"><span class="panel-title">风险与提醒</span><div class="tabs"><span class="tab active">全部 <b id="riskTotalTab">0</b></span><span>高风险 <b id="riskHighTab">0</b></span><span>中风险 <b id="riskMidTab">0</b></span><span>低风险 0</span></div><button class="panel-link">查看全部 ›</button></div>
+                  <div class="risk-grid" id="riskGrid"></div>
+                </section>
+            </section>
+
+            <section class="midrow">
+              <div class="midcol">
                 <div class="panel quick-panel">
                   <div class="panel-head"><span class="panel-title">快速创建任务</span></div>
                   <div class="quick">
@@ -401,19 +437,6 @@
                   <div class="panel-head"><span class="panel-title">CEO 运营指挥台</span><button class="panel-link" onclick="loadCommandCenter()">刷新 ›</button></div>
                   <div style="overflow:auto"><table><thead><tr><th>优先级</th><th>下一步动作</th><th>队列</th></tr></thead><tbody id="opsRows"></tbody></table></div>
                 </div>
-              </div>
-            </section>
-
-            <section class="report-settings-grid">
-              <div class="panel" id="reports">
-                <div class="panel-head"><span class="panel-title">报表中心</span><button class="secondary" onclick="downloadOpsReport()">下载运营报表</button><button class="secondary" onclick="exportTasks()">导出任务 CSV</button><button class="panel-link" onclick="loadAll()">刷新 ›</button></div>
-                <div class="metric-strip">
-                  <div class="mini-metric"><b id="reportTotalTasks">0</b><span>任务总数</span></div>
-                  <div class="mini-metric"><b id="reportDoneTasks">0</b><span>已完成</span></div>
-                  <div class="mini-metric"><b id="reportFailedTasks">0</b><span>调度失败</span></div>
-                  <div class="mini-metric"><b id="reportReviewTasks">0</b><span>待人工审查</span></div>
-                </div>
-                <div style="overflow:auto"><table><thead><tr><th>类型</th><th>数量</th><th>说明</th></tr></thead><tbody id="reportRows"></tbody></table></div>
               </div>
             </section>
 
@@ -455,11 +478,14 @@
                 <div style="font-size:12px;color:#4b5563;margin-bottom:6px">AI 执行进度 <span id="detailPercent" style="float:right">0%</span></div>
                 <div class="progress-pair" style="width:100%"><span class="progress" style="width:auto;flex:1;height:6px"><span id="detailProgress" style="width:0%"></span></span><span class="progress-num" id="detailProgressNum">0%</span></div>
               </div>
-              <div class="field"><label>路由理由</label><div id="detailRoutingReason" class="hint-box">-</div></div>
+              <details class="detail-routing-fold" id="detailRoutingField">
+                <summary>路由理由</summary>
+                <div class="detail-routing-body"><div id="detailRoutingReason" class="hint-box">-</div></div>
+              </details>
               <div class="field" id="detailFailureField" style="display:none"><label>失败回退原因</label><div id="detailFailureBox" class="hint-box alert">-</div></div>
               <div class="detail-log-block">
                 <div style="font-size:12px;color:#4b5563;margin-bottom:6px">最近执行日志（预览）</div>
-                <pre class="log" id="detailLog">暂无日志</pre>
+                <pre class="log" id="detailLog" onclick="openLogFloat(event)" title="点击放大查看完整日志">暂无日志</pre>
               </div>
               <details class="detail-config" id="detailConfig">
                 <summary>任务配置与评审意见</summary>
@@ -474,9 +500,19 @@
               </details>
             </div>
             <div class="detail-footer">
-              <button class="primary" onclick="dispatchTask()">▶ 调度执行</button>
-              <div class="button-row three"><button class="secondary" onclick="routeTask()">智能路由</button><button class="secondary" onclick="retryTask()">重新调度</button><button class="secondary" onclick="saveTask()">保存调整</button></div>
-              <div class="button-row"><button class="success" onclick="reviewTask('approve')">审查通过</button><button class="danger" onclick="reviewTask('reject')">拒绝</button></div>
+              <div class="action-main"><button class="primary" id="taskPrimaryAction" onclick="runTaskNextAction()">开始执行</button><span class="pill" id="taskActionState">待处理</span></div>
+              <div class="action-side">
+                <button class="secondary" id="taskSaveAction" onclick="saveTask()">保存修改</button>
+                <button class="danger" id="taskRejectAction" onclick="reviewTask('reject')" style="display:none">驳回重做</button>
+                <details class="detail-more-actions" id="taskMoreActions">
+                  <summary>更多</summary>
+                  <div class="detail-more-actions-body">
+                    <button class="secondary" onclick="routeTask()">仅智能路由</button>
+                    <button class="secondary" onclick="dispatchTask()">仅启动执行</button>
+                    <button class="secondary" onclick="retryTask()">强制重试</button>
+                  </div>
+                </details>
+              </div>
             </div>
             </aside>
           </div>
@@ -485,7 +521,7 @@
               <div class="panel-head"><span class="panel-title">AI 工具与服务健康</span><button class="panel-link" onclick="loadAll()">刷新服务 ›</button></div>
               <div class="tools-summary" id="toolsSummary">
                 <div class="tools-summary-item"><span>可调度工具</span><b id="toolsRunnableCount">0/0</b><span id="toolsRunnableHint">等待检测</span></div>
-                <div class="tools-summary-item"><span>ACP 互通</span><b id="toolsAcpSummary">待检测</b><span id="toolsAcpHint">五端连接状态</span></div>
+                <div class="tools-summary-item"><span>ACP 互通</span><b id="toolsAcpSummary">待检测</b><span id="toolsAcpHint">Agent 连接状态</span></div>
                 <div class="tools-summary-item"><span>调度链路</span><b id="toolsRoutingCount">0 步</b><span id="toolsRoutingHint">低 Token 策略</span></div>
               </div>
               <details class="tools-details" id="toolsDetails">
@@ -493,7 +529,7 @@
                 <div class="tools-details-body">
                   <div style="overflow:auto"><table><thead><tr><th>服务 - 工具</th><th>状态</th><th>额度剩余</th><th>成功率(24h)</th><th>最后检查</th></tr></thead><tbody id="toolRows"></tbody></table></div>
                   <div class="acp-strip">
-                    <div class="project-head-top"><span class="panel-title">ACP 五端互通</span><span class="pill blue-tag" id="acpStatusPill">待检测</span><button class="panel-link" onclick="loadAcpStatus()">体检 ›</button></div>
+                    <div class="project-head-top"><span class="panel-title">ACP Agent 互通</span><span class="pill blue-tag" id="acpStatusPill">待检测</span><button class="panel-link" onclick="loadAcpStatus()">体检 ›</button></div>
                     <div class="acp-tools" id="acpToolRows"></div>
                     <div class="token-plan"><b>低 Token 调度策略</b><div class="token-chain" id="tokenRoutingChain"></div><span id="tokenRoutingReason">按任务类型自动生成最小上下文链路</span></div>
                   </div>
@@ -516,6 +552,17 @@
                 <summary>运行诊断与高级信息</summary>
                 <div class="settings-list" id="settingsRows"></div>
               </details>
+            </div>
+
+            <div class="panel" id="reports">
+              <div class="panel-head"><span class="panel-title">报表中心</span><button class="secondary" onclick="downloadOpsReport()">下载运营报表</button><button class="secondary" onclick="exportTasks()">导出任务 CSV</button><button class="panel-link" onclick="loadAll()">刷新 ›</button></div>
+              <div class="metric-strip">
+                <div class="mini-metric"><b id="reportTotalTasks">0</b><span>任务总数</span></div>
+                <div class="mini-metric"><b id="reportDoneTasks">0</b><span>已完成</span></div>
+                <div class="mini-metric"><b id="reportFailedTasks">0</b><span>调度失败</span></div>
+                <div class="mini-metric"><b id="reportReviewTasks">0</b><span>待人工审查</span></div>
+              </div>
+              <div style="overflow:auto"><table><thead><tr><th>类型</th><th>数量</th><th>说明</th></tr></thead><tbody id="reportRows"></tbody></table></div>
             </div>
 
             <section class="repo-grid" id="repositories">
@@ -543,6 +590,12 @@
       <div class="board-float-list" id="boardFloatList"></div>
     </div>
   </div>
+  <div class="log-float-mask" id="logFloatMask" onclick="closeLogFloat(event)">
+    <div class="log-float" onclick="event.stopPropagation()">
+      <div class="log-float-head"><b>最近执行日志（放大）</b><span class="pill" id="logFloatTask">当前任务</span><button onclick="closeLogFloat()">×</button></div>
+      <pre class="log log-float-content" id="logFloatContent">暂无日志</pre>
+    </div>
+  </div>
   <div class="toast" id="toast"></div>
 
   <script>
@@ -564,6 +617,7 @@
     let onlyDirtyRepos = false;
     let appSettings = {};
     let routingRules = {};
+    let allowedAssigneeAI = ["Antigravity","Claude Code","Codex","Gemini","Cursor","Other"];
     let settingsDiagnosticsOpen = false;
     const boardCollapsedDefaults = {"待分配":false,"AI执行中":false,"待人工审查":true,"已完成":true};
     const boardCollapsedStorageKey = "ceoConsole.boardCollapsed.v1";
@@ -572,6 +626,7 @@
     let toastTimer = null;
     let selectedProjectName = null;
     let boardFloatStatus = null;
+    let latestDetailLogContent = "暂无日志";
     let refreshTimer = null;
     let liveDetailTimer = null;
     const statusMap = {"待分配":["colTodo","countTodo","colWrapTodo","toggleTodo","summaryTodo"],"AI执行中":["colRunning","countRunning","colWrapRunning","toggleRunning","summaryRunning"],"待人工审查":["colReview","countReview","colWrapReview","toggleReview","summaryReview"],"已完成":["colDone","countDone","colWrapDone","toggleDone","summaryDone"]};
@@ -594,17 +649,34 @@
     }
     function nowClock(){ const d=new Date(); const p=n=>String(n).padStart(2,"0"); qs("clockText").textContent = `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}　星期${"日一二三四五六"[d.getDay()]}　${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
     setInterval(nowClock, 1000); nowClock();
-    function bindHorizontalWheel(){
-      const strip = qs("kpiStrip");
+    let riskAutoScrollTimer = null;
+    function bindHorizontalWheel(targetId, options = {}){
+      const strip = qs(targetId);
       if (!strip) return;
+      let pauseUntil = 0;
+      const pause = (ms = 2200) => { pauseUntil = Date.now() + ms; };
       strip.addEventListener("wheel", event => {
         if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
         if (strip.scrollWidth <= strip.clientWidth) return;
         event.preventDefault();
+        pause();
         strip.scrollLeft += event.deltaY;
       }, {passive:false});
+      strip.addEventListener("mouseenter", () => pause(999999));
+      strip.addEventListener("mouseleave", () => pause(1200));
+      strip.addEventListener("touchstart", () => pause(2600), {passive:true});
+      if (options.auto) {
+        if (riskAutoScrollTimer) clearInterval(riskAutoScrollTimer);
+        riskAutoScrollTimer = setInterval(() => {
+          if (Date.now() < pauseUntil || strip.scrollWidth <= strip.clientWidth) return;
+          const cycleWidth = options.loop ? strip.scrollWidth / 2 : strip.scrollWidth;
+          if (options.loop && strip.scrollLeft >= cycleWidth) strip.scrollLeft -= cycleWidth;
+          strip.scrollBy({left:1, behavior:"auto"});
+        }, options.interval || 55);
+      }
     }
-    bindHorizontalWheel();
+    bindHorizontalWheel("kpiStrip");
+    bindHorizontalWheel("riskGrid", {auto:true, loop:true, interval:55});
 
     function taskPercent(t){
       const lines = (t.execution_progress || "").split(/\r?\n/).filter(Boolean).length;
@@ -634,6 +706,49 @@
       const output = tailText(t.execution_output || "", 9000);
       if (progress && output) return `【执行进度】\n${progress}\n\n【输出日志（最新预览）】\n${output}`;
       return output || progress || "[09:15:22] 等待调度...\n[09:15:27] 本地服务正常\n[09:15:29] 任务详情已载入";
+    }
+    function setDetailLog(content){
+      const logEl = qs("detailLog");
+      if (!logEl) return;
+      latestDetailLogContent = content || "暂无日志";
+      logEl.textContent = latestDetailLogContent;
+      const floatEl = qs("logFloatContent");
+      if (floatEl) floatEl.textContent = latestDetailLogContent;
+      const scrollToBottom = () => { logEl.scrollTop = logEl.scrollHeight; };
+      requestAnimationFrame(() => {
+        syncDetailLogHeight();
+        scrollToBottom();
+        if (floatEl) floatEl.scrollTop = floatEl.scrollHeight;
+        setTimeout(() => {
+          scrollToBottom();
+          if (floatEl) floatEl.scrollTop = floatEl.scrollHeight;
+        }, 0);
+      });
+    }
+    function openLogFloat(event){
+      if (event) event.stopPropagation();
+      const mask = qs("logFloatMask");
+      const content = qs("logFloatContent");
+      const task = currentTask();
+      if (!mask || !content) return;
+      content.textContent = latestDetailLogContent || qs("detailLog")?.textContent || "暂无日志";
+      qs("logFloatTask").textContent = task ? (task.title || "当前任务") : "当前任务";
+      mask.classList.add("show");
+      requestAnimationFrame(() => { content.scrollTop = content.scrollHeight; });
+    }
+    function closeLogFloat(event){
+      if (event && event.target !== qs("logFloatMask")) return;
+      qs("logFloatMask")?.classList.remove("show");
+    }
+    function syncDetailLogHeight(){
+      const body = document.querySelector(".detail-body");
+      const parts = [qs("detailTitle"), qs("detailTags"), document.querySelector(".detail-summary-grid"), document.querySelector(".detail-compact")].filter(Boolean);
+      if (!body || !parts.length) return;
+      const rects = parts.map(el => el.getBoundingClientRect()).filter(rect => rect.height > 0);
+      if (!rects.length) return;
+      const top = Math.min(...rects.map(rect => rect.top));
+      const bottom = Math.max(...rects.map(rect => rect.bottom));
+      body.style.setProperty("--detail-log-h", `${Math.max(150, Math.round(bottom - top))}px`);
     }
     function setNewPriority(p){ newPriority = p; ["P0","P1","P2"].forEach(x => qs(`new${x}`).classList.toggle("active", x === p)); }
     function currentTask(){ return tasks.find(t => t.id === selectedTaskId) || tasks[0] || null; }
@@ -674,7 +789,9 @@
       qs("riskTotalTab").textContent = risks.length;
       qs("riskHighTab").textContent = risks.filter(r => r.cls === "high").length;
       qs("riskMidTab").textContent = risks.filter(r => r.cls === "midrisk").length;
-      qs("riskGrid").innerHTML = risks.slice(0,4).map(r => `<div class="risk-card"><div class="risk-top"><span class="risk-badge ${r.cls}">${esc(r.level)}</span><span>${esc(r.title)}</span></div><div class="risk-meta"><span>影响范围：${esc(r.scope)}</span><span>负责人：${esc(r.owner)}</span><span>时间：${esc(r.time)}</span></div></div>`).join("");
+      const riskCards = risks.slice(0,4).map(r => `<div class="risk-card"><div class="risk-top"><span class="risk-badge ${r.cls}">${esc(r.level)}</span><span>${esc(r.title)}</span></div><div class="risk-meta"><span>影响范围：${esc(r.scope)}</span><span>负责人：${esc(r.owner)}</span><span>时间：${esc(r.time)}</span></div></div>`).join("");
+      const loopCards = risks.slice(0,4).map(r => `<div class="risk-card risk-card-clone" aria-hidden="true"><div class="risk-top"><span class="risk-badge ${r.cls}">${esc(r.level)}</span><span>${esc(r.title)}</span></div><div class="risk-meta"><span>影响范围：${esc(r.scope)}</span><span>负责人：${esc(r.owner)}</span><span>时间：${esc(r.time)}</span></div></div>`).join("");
+      qs("riskGrid").innerHTML = riskCards + loopCards;
     }
 
     function projectTaskStats(name){
@@ -719,19 +836,42 @@
       return `<div class="quota-cell"><div class="quota-top"><span>${esc(quota.label || "待同步")}</span>${reset}</div><div class="quota-bar ${cls}"><span style="width:${percent}%"></span></div>${recharge}</div>`;
     }
 
+    const coreToolOrder = ["Cursor","Antigravity","Claude Code","Codex","Gemini"];
+    const toolLabels = {"Claude Code":"本地 LLM","Codex":"代码生成助手","Gemini":"向量检索 / 研究","Antigravity":"任务调度服务","Cursor":"人工精修入口","Other":"本地运行环境"};
+    function orderedToolNames(includeOther=false){
+      const acpTools = Object.keys((acpStatus || {}).tools || {});
+      const names = [...coreToolOrder, ...Object.keys(toolsStatus || {}), ...acpTools, ...(allowedAssigneeAI || [])]
+        .filter(name => includeOther || name !== "Other");
+      return [...new Set(names)].filter(Boolean);
+    }
+    function renderAISelectOptions(){
+      const names = orderedToolNames(true);
+      if (!names.includes("Other")) names.push("Other");
+      const options = names.map(name => `<option value="${esc(name)}">${esc(name)}</option>`).join("");
+      ["newAI","settingDefaultAI"].forEach(id => {
+        const select = qs(id);
+        if (!select) return;
+        const current = select.value || (id === "settingDefaultAI" ? (appSettings.default_assignee_ai || "Other") : "");
+        select.innerHTML = options;
+        if (current && names.includes(current)) select.value = current;
+      });
+    }
     function renderTools(){
-      const names = ["本地 LLM","代码生成助手","向量检索","任务调度服务","知识库服务","本地运行环境"];
-      const apiNames = ["Claude Code","Codex","Gemini","Antigravity","Cursor","Other"];
-      const detected = apiNames.filter(name => name !== "Other").map(name => toolsStatus[name] || {});
+      renderAISelectOptions();
+      const apiNames = orderedToolNames(false);
+      const detected = apiNames.map(name => toolsStatus[name] || {});
       const runnable = detected.filter(info => info.available && info.runnable).length;
       const available = detected.filter(info => info.available !== false).length;
       qs("toolsRunnableCount").textContent = `${runnable}/${detected.length}`;
       qs("toolsRunnableHint").textContent = `${available} 个工具可见，${runnable} 个可后台调度`;
-      qs("toolRows").innerHTML = names.map((name,i) => {
-        const info = toolsStatus[apiNames[i]] || {};
+      const rowNames = [...apiNames, "Other"];
+      qs("toolRows").innerHTML = rowNames.map((toolName,i) => {
+        const info = toolsStatus[toolName] || {};
         const ok = info.available !== false;
         const acp = info.acp_enabled ? `<span class="pill blue-tag">ACP</span>` : "";
-        return `<tr><td>${esc(name)} ${apiNames[i] !== "Other" ? `<span class="pill">${esc(apiNames[i])}</span>${acp}` : ""}</td><td><span class="service-dot">●</span>${ok ? "正常" : "缺失"}</td><td>${quotaHtml(info)}</td><td>${["92%","89%","99%","100%","96%","-"][i]}</td><td>${i === 5 ? "09:36" : "09:3" + i}</td></tr>`;
+        const dyn = info.dynamic_acp ? `<span class="pill p-green">新 Agent</span>` : "";
+        const label = toolLabels[toolName] || "ACP Agent";
+        return `<tr><td>${esc(label)} ${toolName !== "Other" ? `<span class="pill">${esc(toolName)}</span>${acp}${dyn}` : ""}</td><td><span class="service-dot">●</span>${ok ? (info.runnable ? "可调度" : "可见") : "缺失"}</td><td>${quotaHtml(info)}</td><td>${["92%","89%","99%","100%","96%","91%","88%"][i % 7] || "-"}</td><td>${i >= 5 ? "刚刚" : "09:3" + i}</td></tr>`;
       }).join("");
       renderAcpStatus();
     }
@@ -740,21 +880,22 @@
       const scripts = acpStatus.scripts || {};
       const agent = (scripts.agent || {});
       const tools = acpStatus.tools || {};
-      const connected = ["Cursor","Antigravity","Claude Code","Codex","Gemini"].filter(name => {
+      const names = orderedToolNames(false);
+      const connected = names.filter(name => {
         const tool = tools[name] || {};
         const info = toolsStatus[name] || {};
-        return tool.configured || info.acp_enabled;
+        return tool.configured || info.acp_enabled || info.acp_configured;
       }).length;
-      qs("toolsAcpSummary").textContent = agent.executable ? `${connected}/5` : "未接入";
-      qs("toolsAcpHint").textContent = agent.executable ? (acpStatus.ok ? "互通正常" : "已接入，需体检") : "等待 ACP Agent";
+      qs("toolsAcpSummary").textContent = agent.executable ? `${connected}/${names.length}` : "未接入";
+      qs("toolsAcpHint").textContent = agent.executable ? `已发现 ${names.length} 个 Agent` : "等待 ACP Agent";
       qs("acpStatusPill").textContent = agent.executable ? (acpStatus.ok ? "互通正常" : "已接入，需体检") : "未接入";
       qs("acpStatusPill").className = `pill ${agent.executable ? (acpStatus.ok ? "p-green" : "p-orange") : "p-red"}`;
-      const names = ["Cursor","Antigravity","Claude Code","Codex","Gemini"];
       qs("acpToolRows").innerHTML = names.map(name => {
         const tool = tools[name] || {};
         const info = toolsStatus[name] || {};
-        const ok = tool.configured || info.acp_enabled;
-        return `<div class="acp-tool"><b>${esc(name)}</b><span class="${ok ? "ok" : ""}">${ok ? "ACP 已连接" : "等待配置"}</span><span>${esc(tool.target || info.acp_target || "-")}</span></div>`;
+        const ok = tool.configured || info.acp_enabled || info.acp_configured;
+        const dyn = (tool.builtin === false || info.dynamic_acp) ? " · 新加入" : "";
+        return `<div class="acp-tool"><b>${esc(name)}</b><span class="${ok ? "ok" : ""}">${ok ? "ACP 已连接" : "等待配置"}${dyn}</span><span>${esc(tool.target || info.acp_target || "-")}</span></div>`;
       }).join("");
       renderTokenRouting();
     }
@@ -981,6 +1122,36 @@
       renderBoardFloat();
     }
     function selectTask(id){ selectedTaskId = id; renderBoard(); renderDetail(); }
+    function renderTaskActions(t){
+      const primary = qs("taskPrimaryAction");
+      const state = qs("taskActionState");
+      const save = qs("taskSaveAction");
+      const reject = qs("taskRejectAction");
+      const more = qs("taskMoreActions");
+      if (!primary || !state || !save || !reject || !more) return;
+      if (!t) {
+        primary.textContent = "选择任务";
+        primary.disabled = true;
+        state.textContent = "未选择";
+        save.style.display = "none";
+        reject.style.display = "none";
+        more.style.display = "none";
+        return;
+      }
+      const status = effectiveTaskStatus(t);
+      const rework = isReworkTask(t);
+      const statusText = {"待分配":"待处理","AI执行中":"执行中","待人工审查":"待验收","已完成":"已完成"}[status] || status;
+      primary.disabled = false;
+      state.textContent = rework ? "回退待处理" : statusText;
+      save.style.display = ["待分配","待人工审查"].includes(status) ? "" : "none";
+      reject.style.display = status === "待人工审查" ? "" : "none";
+      more.style.display = ["AI执行中","已完成"].includes(status) ? "none" : "";
+      if (status === "待人工审查") primary.textContent = "通过验收";
+      else if (status === "AI执行中") primary.textContent = "查看日志";
+      else if (status === "已完成") { primary.textContent = "已完成"; primary.disabled = true; }
+      else if (rework) primary.textContent = "重新执行";
+      else primary.textContent = "开始执行";
+    }
     function renderDetail(){
       const t = currentTask();
       if (!t) return;
@@ -1005,9 +1176,8 @@
       qs("detailPercent").textContent = `${p}%`;
       qs("detailProgressNum").textContent = `${p}%`;
       qs("detailProgress").style.width = `${p}%`;
-      const logEl = qs("detailLog");
-      logEl.textContent = taskLogPreview(t);
-      logEl.scrollTop = logEl.scrollHeight;
+      setDetailLog(taskLogPreview(t));
+      renderTaskActions(t);
     }
 
     async function refreshSelectedTaskDetail(){
@@ -1043,6 +1213,7 @@
         decisions = decisionRows || [];
         appSettings = (settingsResp || {}).settings || {};
         routingRules = (settingsResp || {}).routing_rules || {};
+        allowedAssigneeAI = (((settingsResp || {}).allowed || {}).assignee_ai || allowedAssigneeAI);
         repositories = (repoResp || {}).repositories || [];
         repoCounts = (repoResp || {}).counts || {};
         operationsReport = reportResp || {};
@@ -1083,6 +1254,22 @@
       toast("调整已保存");
       await loadAll();
     }
+    async function runTaskNextAction(){
+      const t=currentTask(); if(!t){toast("请先选择任务");return;}
+      const status = effectiveTaskStatus(t);
+      if (status === "AI执行中") { openLogFloat(); return; }
+      if (status === "待人工审查") { await reviewTask("approve"); return; }
+      if (status === "已完成") { toast("任务已完成"); return; }
+      if (isReworkTask(t)) { await retryTask(); return; }
+      if (!t.routing_reason || t.assignee_ai === "Other") {
+        const routed = await fetchJSON(`/api/tasks/${t.id}/route`,{method:"POST"});
+        toast(`已选择 ${routed.tool}，开始执行`);
+      } else {
+        toast("开始执行");
+      }
+      await fetchJSON(`/api/tasks/${t.id}/dispatch`,{method:"POST"});
+      await loadAll();
+    }
     async function routeTask(){ const t=currentTask(); if(!t){toast("请先选择任务");return;} const res=await fetchJSON(`/api/tasks/${t.id}/route`,{method:"POST"}); toast(`已路由到 ${res.tool}`); await loadAll(); }
     async function dispatchTask(){ const t=currentTask(); if(!t){toast("请先选择任务");return;} if(t.status==="已完成"){toast("已完成任务不应重复调度");return;} await fetchJSON(`/api/tasks/${t.id}/dispatch`,{method:"POST"}); toast("调度已开始"); await loadAll(); }
     async function retryTask(){ const t=currentTask(); if(!t){toast("请先选择任务");return;} await fetchJSON(`/api/tasks/${t.id}/retry`,{method:"POST"}); toast("已重新调度"); await loadAll(); }
@@ -1112,7 +1299,8 @@
       qs("detailPercent").textContent = "0%";
       qs("detailProgressNum").textContent = "0%";
       qs("detailProgress").style.width = "0%";
-      qs("detailLog").textContent = "暂无日志";
+      setDetailLog("暂无日志");
+      renderTaskActions(null);
     }
     async function reviewTask(decision){
       const t=currentTask(); if(!t) return;
@@ -1197,7 +1385,7 @@
         await navigator.clipboard.writeText(content);
         toast("诊断信息已复制");
       } catch (_) {
-        qs("detailLog").textContent = content;
+        setDetailLog(content);
         toast("无法写入剪贴板，已放到右侧日志");
       }
     }
@@ -1251,19 +1439,23 @@
       try {
         const res = await fetchJSON("/api/repositories/action", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ path: repo.path, action, message }) });
         const header = `[${new Date().toLocaleTimeString()}] ${repo.name} · ${res.command || action}`;
-        qs("detailLog").textContent = `${header}\n${res.output || "无输出"}`;
-        qs("detailLog").scrollTop = qs("detailLog").scrollHeight;
+        setDetailLog(`${header}\n${res.output || "无输出"}`);
         toast(res.ok ? "Git 操作完成" : "Git 操作失败");
         await loadRepositories();
       } catch (e) {
-        qs("detailLog").textContent = `[${new Date().toLocaleTimeString()}] ${repo.name} · ${action}\n${e.message || e}`;
+        setDetailLog(`[${new Date().toLocaleTimeString()}] ${repo.name} · ${action}\n${e.message || e}`);
         toast(`Git 操作失败：${e.message || e}`);
       }
     }
     async function loadAcpStatus(){
       acpStatus = await fetchJSON("/api/acp/status");
-      renderAcpStatus();
-      toast(acpStatus.ok ? "ACP 五端互通正常" : "ACP 体检完成，请查看状态");
+      const refreshed = await fetchJSON("/api/settings/refresh-tools", {method:"POST"});
+      toolsStatus = refreshed.tools || toolsStatus;
+      allowedAssigneeAI = orderedToolNames(true);
+      renderTools();
+      renderSettings();
+      applySettingsToQuickCreate();
+      toast(acpStatus.ok ? "ACP Agent 互通正常" : "ACP 体检完成，请查看状态");
     }
     function toggleDirtyRepos(){
       onlyDirtyRepos = !onlyDirtyRepos;
@@ -1293,7 +1485,7 @@
       document.querySelectorAll(".nav-item").forEach(x => x.classList.toggle("active", x === item));
     }
     function bindFloatingDetails(){
-      const ids = ["toolsDetails","settingsDiagnostics","detailConfig"];
+      const ids = ["toolsDetails","settingsDiagnostics","detailConfig","detailRoutingField","taskMoreActions"];
       const all = () => ids.map(id => qs(id)).filter(Boolean);
       all().forEach(el => el.addEventListener("toggle", e => {
         if (e.currentTarget.id === "settingsDiagnostics") settingsDiagnosticsOpen = e.currentTarget.open;
@@ -1314,7 +1506,11 @@
       scrollToSection(hash);
     }));
     bindFloatingDetails();
-    document.addEventListener("keydown", e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") { e.preventDefault(); loadAll(); } });
+    window.addEventListener("resize", syncDetailLogHeight);
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") closeLogFloat();
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") { e.preventDefault(); loadAll(); }
+    });
     liveDetailTimer = setInterval(refreshSelectedTaskDetail, 2000);
     loadAll();
     scheduleAutoRefresh(true);

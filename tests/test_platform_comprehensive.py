@@ -234,6 +234,75 @@ def test_acp_tool_status_and_command_building(client, tmp_path: Path, monkeypatc
     assert "交互窗口" in err
 
 
+def test_dynamic_acp_agent_discovery_and_join(client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    company_dir = tmp_path / "company"
+    company_dir.mkdir(parents=True, exist_ok=True)
+    status_script = company_dir / "acp-all-status"
+    agent_script = company_dir / "acp-agent"
+    status_script.write_text(
+        "#!/bin/bash\n"
+        "echo '[OK]   Qwen Code 命令: /usr/bin/qwen-code'\n"
+        "echo '[OK]   Qwen Code context inject: 成功'\n",
+        encoding="utf-8",
+    )
+    agent_script.write_text("#!/bin/bash\n", encoding="utf-8")
+    status_script.chmod(0o755)
+    agent_script.chmod(0o755)
+    monkeypatch.setattr(server, "resolve_company_dir", lambda: (company_dir, "safe_home_company"))
+
+    acp = client.get("/api/acp/status").get_json()
+    assert acp["tools"]["Qwen Code"]["configured"] is True
+    assert acp["tools"]["Qwen Code"]["target"] == "qwen-code"
+    assert acp["tools"]["Qwen Code"]["builtin"] is False
+
+    tools = client.get("/api/tools/status").get_json()
+    assert tools["Qwen Code"]["dynamic_acp"] is True
+    assert tools["Qwen Code"]["acp_enabled"] is True
+    assert tools["Qwen Code"]["runnable"] is True
+
+    settings = client.get("/api/settings").get_json()
+    assert "Qwen Code" in settings["allowed"]["assignee_ai"]
+
+    created = _create_task(client, title="动态 Agent 任务", assignee_ai="Qwen Code", auto_route=False).get_json()
+    assert created["assignee_ai"] == "Qwen Code"
+
+    cmd, err = server.build_tool_run_command("Qwen Code", "hello")
+    assert err is None
+    assert cmd == [str(agent_script), "qwen-code", "hello"]
+
+
+def test_hermes_agent_discovered_from_project_hook(client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    company_dir = tmp_path / "company"
+    hooks_dir = company_dir / ".agent-coordinator" / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    (hooks_dir / "hermes.js").write_text("// hermes hook\n", encoding="utf-8")
+    agent_script = company_dir / "acp-agent"
+    agent_script.write_text("#!/bin/bash\n", encoding="utf-8")
+    agent_script.chmod(0o755)
+    monkeypatch.setattr(server, "resolve_company_dir", lambda: (company_dir, "safe_home_company"))
+    monkeypatch.setattr(server, "resolve_tool_command", lambda tool: "/usr/bin/hermes" if tool == "Hermes" else None)
+    monkeypatch.setattr(server, "check_command_runnable", lambda path: (True, None))
+
+    summary = client.get("/api/acp/summary").get_json()
+    assert summary["tools"]["Hermes"]["configured"] is True
+    assert summary["tools"]["Hermes"]["target"] == "hermes"
+
+    tools = client.get("/api/tools/status").get_json()
+    assert tools["Hermes"]["dynamic_acp"] is True
+    assert tools["Hermes"]["available"] is True
+    assert tools["Hermes"]["runnable"] is True
+
+    settings = client.get("/api/settings").get_json()
+    assert "Hermes" in settings["allowed"]["assignee_ai"]
+
+    created = _create_task(client, title="Hermes 任务", assignee_ai="Hermes", auto_route=False).get_json()
+    assert created["assignee_ai"] == "Hermes"
+
+    cmd, err = server.build_tool_run_command("Hermes", "hello")
+    assert err is None
+    assert cmd == ["/usr/bin/hermes", "--accept-hooks", "-z", "hello"]
+
+
 def test_token_optimized_routing_endpoint_and_task_reason(client):
     small = client.get(
         "/api/acp/token-routing?task_type=security_review&title=小范围权限检查&locked_scope=src/auth.py"

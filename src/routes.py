@@ -192,7 +192,7 @@ def api_acp_status():
         "ok": False,
         "stdout": "",
         "stderr": "",
-        "tools": {tool: {"target": target, "configured": False} for tool, target in ACP_TOOL_TARGET.items()},
+        "tools": get_acp_agent_registry(),
     }
     status_script = scripts["status"]
     if not status_script["exists"] or not status_script["executable"]:
@@ -216,8 +216,9 @@ def api_acp_status():
     body["ok"] = result.returncode == 0
     body["stdout"] = stdout[-12000:]
     body["stderr"] = stderr[-4000:]
-    for tool in body["tools"]:
-        body["tools"][tool]["configured"] = tool in stdout and "[OK]" in stdout
+    body["tools"] = get_acp_agent_registry(stdout)
+    _TOOL_STATUS_CACHE["ts"] = None
+    _TOOL_STATUS_CACHE["data"] = None
     return jsonify(body)
 
 
@@ -226,13 +227,18 @@ def api_acp_summary():
     company_dir, source = resolve_company_dir()
     scripts = get_acp_scripts()
     enabled = bool(scripts["agent"]["exists"] and scripts["agent"]["executable"])
+    registry = get_acp_agent_registry()
+    tools = {
+        name: {**entry, "configured": bool(entry.get("configured") or (enabled and entry.get("builtin")))}
+        for name, entry in registry.items()
+    }
     return jsonify(
         {
             "company_dir": str(company_dir),
             "source": source,
             "ok": enabled,
             "scripts": scripts,
-            "tools": {tool: {"target": target, "configured": enabled} for tool, target in ACP_TOOL_TARGET.items()},
+            "tools": tools,
         }
     )
 
@@ -366,7 +372,7 @@ def api_create_task():
         return jsonify({"error": f"invalid status: {status}"}), 400
     if priority not in ALLOWED_PRIORITY:
         return jsonify({"error": f"invalid priority: {priority}"}), 400
-    if assignee_ai not in ALLOWED_AI:
+    if not is_allowed_ai_name(assignee_ai):
         assignee_ai = "Other"
     routing_reason = ""
     if bool(data.get("auto_route")) or assignee_ai == "Other":
@@ -436,7 +442,7 @@ def api_update_task(task_id: int):
         fields["project"] = project
     if "assignee_ai" in data:
         ai = str(data["assignee_ai"]).strip()
-        fields["assignee_ai"] = ai if ai in ALLOWED_AI else "Other"
+        fields["assignee_ai"] = ai if is_allowed_ai_name(ai) else "Other"
     if "status" in data:
         st = str(data["status"]).strip()
         if st not in ALLOWED_STATUS:
@@ -851,7 +857,7 @@ def api_settings():
                 "routing_rules": {key: {"tool": value[0], "reason": value[1]} for key, value in TASK_TYPE_TOOL_ROUTE.items()},
                 "allowed": {
                     "task_types": sorted(ALLOWED_TASK_TYPE),
-                    "assignee_ai": sorted(ALLOWED_AI),
+                    "assignee_ai": sorted(allowed_ai_names()),
                 },
             }
         )
