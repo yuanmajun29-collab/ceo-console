@@ -15,7 +15,7 @@ from typing import Any
 
 from .config import *
 from .db import db_conn, init_db
-from .tools import build_tool_run_command, pick_fallback_tool
+from .tools import build_tool_run_command, dispatch_candidate_plan, pick_fallback_tool
 
 def launchd_service_status() -> dict[str, Any]:
     label = "com.oneperson.ceo-console"
@@ -120,57 +120,28 @@ def log_indicates_success(text: str) -> bool:
     return any(marker in text for marker in success_markers)
 
 
-def dispatch_task_worker(task_id: int) -> None:
-    init_db()
-    with closing(db_conn()) as conn:
-        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-    if row is None:
-        return
+def execution_tool_label(requested_tool: str, actual_tool: str) -> str:
+    return f"{requested_tool}->{actual_tool}" if requested_tool != actual_tool else actual_tool
 
-    requested_tool = row["assignee_ai"]
-    tool = requested_tool
-    prompt = build_dispatch_prompt(row)
-    append_task_progress(task_id, f"任务进入调度队列，请求工具：{requested_tool}")
-    cmd, build_err = build_tool_run_command(tool, prompt)
 
-    # Auto-fallback: keep dispatch running even if chosen tool is not headless-runnable.
-    if build_err:
-        fallback_tool, fallback_err = pick_fallback_tool()
-        if fallback_tool:
-            tool = fallback_tool
-            cmd, build_err = build_tool_run_command(tool, prompt)
-            if not build_err:
-                append_task_progress(task_id, f"工具不可调度，自动回退到：{tool}")
-                set_task_execution_state(
-                    task_id,
-                    "idle",
-                    execution_error=f"已自动回退：请求工具 {requested_tool} 不可调度，改用 {tool}",
-                )
-        else:
-            build_err = f"{build_err}；{fallback_err}"
-
-    if build_err:
-        append_task_progress(task_id, f"构建执行命令失败：{build_err}")
-        set_task_execution_state(
-            task_id,
-            "unsupported",
-            execution_tool=requested_tool,
-            execution_error=build_err,
-            execution_finished_at=now_str(),
-        )
-        return
-
+def run_dispatch_attempt(
+    task_id: int,
+    row: sqlite3.Row,
+    requested_tool: str,
+    actual_tool: str,
+    cmd: list[str],
+    attempt_index: int,
+) -> dict[str, Any]:
     set_task_execution_state(
         task_id,
         "running",
-        execution_tool=f"{requested_tool}->{tool}" if requested_tool != tool else tool,
+        execution_tool=execution_tool_label(requested_tool, actual_tool),
         execution_command=" ".join(cmd),
         execution_started_at=now_str(),
         execution_error=None,
         execution_output=None,
-        execution_progress=None,
     )
-    append_task_progress(task_id, f"开始执行：{' '.join(cmd)}")
+    append_task_progress(task_id, f"开始执行节点 {actual_tool}（第 {attempt_index} 次尝试）：{' '.join(cmd)}")
     with closing(db_conn()) as conn:
         conn.execute("UPDATE tasks SET status = 'AI执行中', updated_at = ? WHERE id = ?", (now_str(), task_id))
         conn.commit()
@@ -179,7 +150,8 @@ def dispatch_task_worker(task_id: int) -> None:
     project_dir = company_dir / row["project"]
     logs_dir = DATA_DIR / "run-logs"
     logs_dir.mkdir(parents=True, exist_ok=True)
-    log_path = logs_dir / f"task-{task_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.log"
+    safe_tool = re.sub(r"[^A-Za-z0-9._-]+", "-", actual_tool).strip("-") or "tool"
+    log_path = logs_dir / f"task-{task_id}-{datetime.now().strftime('%Y%m%d-%H%M%S')}-attempt{attempt_index}-{safe_tool}.log"
     try:
         run_cwd = str(project_dir) if project_dir.exists() else str(company_dir)
         last_output = ""
@@ -222,42 +194,102 @@ def dispatch_task_worker(task_id: int) -> None:
 
         final_output = read_file_tail(log_path, max_chars=12000)
         if timed_out:
-            append_task_progress(task_id, "执行超时，已终止进程")
-            set_task_execution_state(
-                task_id,
-                "failed",
-                execution_output=final_output,
-                execution_error=f"执行超时（{get_dispatch_timeout_seconds()}秒），日志文件：{log_path}",
-                execution_finished_at=now_str(),
-            )
-            return
+            error = f"{actual_tool} 执行超时（{get_dispatch_timeout_seconds()}秒），日志文件：{log_path}"
+            append_task_progress(task_id, error)
+            return {"ok": False, "tool": actual_tool, "output": final_output, "error": error, "log_path": str(log_path)}
 
         if return_code == 0:
-            append_task_progress(task_id, "执行完成：成功")
+            append_task_progress(task_id, f"节点 {actual_tool} 执行完成：成功")
+            return {"ok": True, "tool": actual_tool, "output": final_output, "error": None, "log_path": str(log_path)}
+
+        error = f"{actual_tool} 命令退出码 {return_code}，日志文件：{log_path}"
+        append_task_progress(task_id, f"节点执行失败：{error}")
+        return {"ok": False, "tool": actual_tool, "output": final_output, "error": error, "log_path": str(log_path)}
+    except Exception as exc:
+        error = f"{actual_tool} 执行异常：{exc}"
+        append_task_progress(task_id, error)
+        return {"ok": False, "tool": actual_tool, "output": "", "error": error, "log_path": str(log_path)}
+
+
+def dispatch_task_worker(task_id: int) -> None:
+    init_db()
+    with closing(db_conn()) as conn:
+        row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    if row is None:
+        return
+
+    requested_tool = row["assignee_ai"]
+    prompt = build_dispatch_prompt(row)
+    append_task_progress(task_id, f"任务进入调度队列，请求工具：{requested_tool}")
+
+    try:
+        plan = dispatch_candidate_plan(row)
+        candidates = plan.get("candidates") or []
+        skipped = plan.get("skipped") or []
+    except Exception as exc:
+        append_task_progress(task_id, f"读取可执行链路失败：{exc}")
+        fallback_tool, fallback_err = pick_fallback_tool()
+        candidates = [fallback_tool] if fallback_tool else [requested_tool]
+        skipped = [] if fallback_tool else [{"tool": requested_tool, "reason": fallback_err or str(exc)}]
+
+    for item in skipped:
+        append_task_progress(task_id, f"跳过不可用节点：{item.get('tool')}，原因：{item.get('reason')}")
+
+    initial_failures: list[str] = []
+    if not candidates:
+        fallback_tool, fallback_err = pick_fallback_tool()
+        if fallback_tool:
+            candidates = [fallback_tool]
+            append_task_progress(task_id, f"可执行链路为空，自动启用全局后备：{fallback_tool}")
+        else:
+            candidates = [requested_tool]
+            initial_failures.append(f"全局后备：{fallback_err}")
+            append_task_progress(task_id, f"没有预检可执行 Agent，保底尝试请求工具 {requested_tool}：{fallback_err}")
+
+    append_task_progress(task_id, f"可执行候选链路：{' → '.join(candidates)}")
+    failures: list[str] = initial_failures[:]
+    last_output = ""
+    attempted: list[str] = []
+
+    for index, tool in enumerate(candidates, start=1):
+        cmd, build_err = build_tool_run_command(tool, prompt)
+        if build_err:
+            failures.append(f"{tool}：{build_err}")
+            append_task_progress(task_id, f"节点 {tool} 构建执行命令失败，准备故障转移：{build_err}")
+            continue
+
+        if requested_tool != tool:
+            append_task_progress(task_id, f"故障转移执行：请求工具 {requested_tool}，当前使用 {tool}")
+        attempted.append(tool)
+        result = run_dispatch_attempt(task_id, row, requested_tool, tool, cmd, index)
+        last_output = result.get("output") or last_output
+        if result.get("ok"):
             set_task_execution_state(
                 task_id,
                 "succeeded",
-                execution_output=final_output,
+                execution_tool=execution_tool_label(requested_tool, tool),
+                execution_output=last_output,
                 execution_error=None,
                 execution_finished_at=now_str(),
             )
             with closing(db_conn()) as conn:
                 conn.execute("UPDATE tasks SET status = '待人工审查', updated_at = ? WHERE id = ?", (now_str(), task_id))
                 conn.commit()
-        else:
-            append_task_progress(task_id, f"执行完成：失败（退出码 {return_code}）")
-            set_task_execution_state(
-                task_id,
-                "failed",
-                execution_output=final_output,
-                execution_error=f"命令退出码 {return_code}，日志文件：{log_path}",
-                execution_finished_at=now_str(),
-            )
-    except Exception as exc:
-        append_task_progress(task_id, f"执行异常：{exc}")
-        set_task_execution_state(
-            task_id,
-            "failed",
-            execution_error=str(exc)[:4000],
-            execution_finished_at=now_str(),
-        )
+            return
+
+        failures.append(f"{tool}：{result.get('error') or '执行失败'}")
+        remaining = candidates[index:]
+        if remaining:
+            append_task_progress(task_id, f"节点 {tool} 失败，故障转移到下一个候选：{remaining[0]}")
+
+    state = "failed" if attempted else "unsupported"
+    error = "；".join(failures)[-4000:] if failures else "所有候选节点均不可调度"
+    append_task_progress(task_id, f"所有候选节点执行失败：{error}")
+    set_task_execution_state(
+        task_id,
+        state,
+        execution_tool=execution_tool_label(requested_tool, attempted[-1]) if attempted else requested_tool,
+        execution_output=last_output or None,
+        execution_error=error,
+        execution_finished_at=now_str(),
+    )

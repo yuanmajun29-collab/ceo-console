@@ -271,6 +271,42 @@ def test_dynamic_acp_agent_discovery_and_join(client, tmp_path: Path, monkeypatc
     assert cmd == [str(agent_script), "qwen-code", "hello"]
 
 
+def test_dynamic_acp_agent_deletion_is_removed_from_registry(client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    company_dir = tmp_path / "company"
+    company_dir.mkdir(parents=True, exist_ok=True)
+    status_script = company_dir / "acp-all-status"
+    agent_script = company_dir / "acp-agent"
+    agent_script.write_text("#!/bin/bash\n", encoding="utf-8")
+    agent_script.chmod(0o755)
+    status_script.write_text(
+        "#!/bin/bash\n"
+        "echo '[OK]   Qwen Code context inject: 成功'\n",
+        encoding="utf-8",
+    )
+    status_script.chmod(0o755)
+    monkeypatch.setattr(server, "resolve_company_dir", lambda: (company_dir, "safe_home_company"))
+    monkeypatch.setattr(server, "ACP_DISCOVERY_REFRESH_SECONDS", 0)
+
+    connected = client.get("/api/acp/status").get_json()
+    assert "Qwen Code" in connected["tools"]
+
+    status_script.write_text(
+        "#!/bin/bash\n"
+        "echo '[OK]   Cursor context inject: 成功'\n",
+        encoding="utf-8",
+    )
+
+    summary = client.get("/api/acp/summary").get_json()
+    assert "Qwen Code" not in summary["tools"]
+    assert "Qwen Code" in summary["discovery"]["removed_tools"]
+
+    tools = client.get("/api/tools/status").get_json()
+    assert "Qwen Code" not in tools
+
+    settings = client.get("/api/settings").get_json()
+    assert "Qwen Code" not in settings["allowed"]["assignee_ai"]
+
+
 def test_hermes_agent_discovered_from_project_hook(client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     company_dir = tmp_path / "company"
     hooks_dir = company_dir / ".agent-coordinator" / "hooks"
@@ -336,6 +372,36 @@ def test_token_optimized_routing_endpoint_and_task_reason(client):
     assert task["assignee_ai"] == "Claude Code"
     assert "Token 优先链路" in task["routing_reason"]
     assert "Codex" in task["routing_reason"]
+
+
+def test_availability_aware_route_skips_unavailable_primary(client, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(
+        server,
+        "get_tools_status_cached",
+        lambda: {
+            "Claude Code": {"available": False, "runnable": False, "reason": "额度不足"},
+            "Gemini": {"available": True, "runnable": True},
+            "Codex": {"available": True, "runnable": True},
+            "Antigravity": {"available": False, "runnable": False},
+            "Cursor": {"available": True, "runnable": False, "reason": "交互模式"},
+        },
+    )
+    created = client.post(
+        "/api/tasks",
+        json={
+            "title": "设计不可用节点容错架构",
+            "project": "proj-a",
+            "assignee_ai": "Other",
+            "task_type": "architecture",
+            "auto_route": True,
+        },
+    )
+    assert created.status_code == 201
+    task = created.get_json()
+    assert task["assignee_ai"] == "Gemini"
+    assert "可执行链路" in task["routing_reason"]
+    assert "Claude Code" in task["routing_reason"]
+    assert "已跳过不可用节点" in task["routing_reason"]
 
 
 def test_project_profile_adjusts_tool_combination(client, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -30,6 +30,7 @@ DEFAULT_RECHARGE_URLS = {
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5050
 DEFAULT_DISPATCH_TIMEOUT_SECONDS = 1800
+ACP_DISCOVERY_REFRESH_SECONDS = int(os.getenv("CEO_CONSOLE_ACP_DISCOVERY_REFRESH_SECONDS", "5"))
 
 ALLOWED_STATUS = {"待分配", "AI执行中", "待人工审查", "已完成"}
 ALLOWED_PRIORITY = {"P0", "P1", "P2"}
@@ -78,7 +79,7 @@ ACP_AGENT_NAME_ALIASES = {
     "Hermes": "Hermes",
 }
 ACP_NON_AGENT_NAMES = {"coordinator", "项目目录", "INFO", "WARN", "ERROR"}
-_ACP_DISCOVERY_CACHE: dict[str, Any] = {"tools": {}, "stdout": "", "ts": None}
+_ACP_DISCOVERY_CACHE: dict[str, Any] = {"tools": {}, "stdout": "", "ts": None, "ts_epoch": None, "company_dir": None}
 TOOL_TOKEN_PROFILE = {
     "Codex": {
         "cost": 1,
@@ -280,15 +281,45 @@ def parse_acp_status_tools(stdout: str) -> dict[str, dict[str, Any]]:
     return tools
 
 
+def clear_acp_discovery_cache() -> None:
+    _ACP_DISCOVERY_CACHE["tools"] = {}
+    _ACP_DISCOVERY_CACHE["stdout"] = ""
+    _ACP_DISCOVERY_CACHE["ts"] = None
+    _ACP_DISCOVERY_CACHE["ts_epoch"] = None
+    _ACP_DISCOVERY_CACHE["company_dir"] = None
+
+
+def acp_discovery_cache_age_seconds() -> float | None:
+    ts_epoch = _ACP_DISCOVERY_CACHE.get("ts_epoch")
+    if ts_epoch is None:
+        return None
+    try:
+        return max(0.0, datetime.now().timestamp() - float(ts_epoch))
+    except (TypeError, ValueError):
+        return None
+
+
+def update_acp_discovery_cache(stdout: str, company_dir: Path | None = None) -> dict[str, dict[str, Any]]:
+    discovered = parse_acp_status_tools(stdout)
+    _ACP_DISCOVERY_CACHE["tools"] = discovered
+    _ACP_DISCOVERY_CACHE["stdout"] = stdout
+    _ACP_DISCOVERY_CACHE["ts"] = now_str()
+    _ACP_DISCOVERY_CACHE["ts_epoch"] = datetime.now().timestamp()
+    _ACP_DISCOVERY_CACHE["company_dir"] = str(company_dir) if company_dir else None
+    return discovered
+
+
 def get_acp_agent_registry(stdout: str | None = None) -> dict[str, dict[str, Any]]:
+    company_dir, _ = resolve_company_dir()
+    cached_company = _ACP_DISCOVERY_CACHE.get("company_dir")
+    if cached_company and cached_company != str(company_dir):
+        clear_acp_discovery_cache()
+
     registry = {name: _agent_entry(name, target, False, "fixed") for name, target in ACP_TOOL_TARGET.items()}
     registry.update(discover_local_acp_agents())
     registry.update(parse_extra_acp_agents_env())
     if stdout is not None:
-        discovered = parse_acp_status_tools(stdout)
-        _ACP_DISCOVERY_CACHE["tools"] = discovered
-        _ACP_DISCOVERY_CACHE["stdout"] = stdout
-        _ACP_DISCOVERY_CACHE["ts"] = now_str()
+        update_acp_discovery_cache(stdout, company_dir)
     for name, entry in (_ACP_DISCOVERY_CACHE.get("tools") or {}).items():
         registry[name] = {**registry.get(name, {}), **entry}
     return registry

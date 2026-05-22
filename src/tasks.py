@@ -201,7 +201,7 @@ def build_task_execution_report(task: dict[str, Any]) -> dict[str, Any]:
 
     evidence_lines = []
     for line in progress.splitlines():
-        if any(key in line for key in ["开始执行", "进程已启动", "执行完成", "人工审查"]):
+        if any(key in line for key in ["可执行候选链路", "跳过不可用节点", "故障转移", "开始执行", "进程已启动", "执行完成", "人工审查"]):
             evidence_lines.append(line)
     if error:
         evidence_lines.append(f"执行错误：{error}")

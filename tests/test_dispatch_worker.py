@@ -122,6 +122,55 @@ def test_dispatch_worker_auto_fallback(isolated_env, monkeypatch: pytest.MonkeyP
     assert "fallback ok" in (after["execution_output"] or "")
 
 
+def test_dispatch_worker_runtime_failure_fails_over_to_next_candidate(isolated_env, monkeypatch: pytest.MonkeyPatch):
+    task_id = _new_task(assignee_ai="Codex")
+
+    monkeypatch.setattr(
+        server,
+        "dispatch_candidate_plan",
+        lambda row: {"candidates": ["Codex", "Claude Code"], "skipped": [], "requested_tool": "Codex"},
+    )
+
+    def fake_build(tool, prompt):
+        if tool == "Codex":
+            return ["fail-cli", prompt], None
+        return ["good-cli", prompt], None
+
+    monkeypatch.setattr(server, "build_tool_run_command", fake_build)
+    monkeypatch.setattr(server.time, "sleep", lambda *_: None)
+
+    class FakePopen:
+        def __init__(self, cmd, cwd, text, encoding, errors, stdout, stderr):
+            self.cmd = cmd
+            self.returncode = None
+            self._poll_count = 0
+            self.pid = 42345
+            stdout.write("good ok\n" if cmd[0] == "good-cli" else "first failed\n")
+            stdout.flush()
+
+        def poll(self):
+            self._poll_count += 1
+            if self._poll_count == 1:
+                return None
+            self.returncode = 0 if self.cmd[0] == "good-cli" else 1
+            return self.returncode
+
+        def kill(self):
+            self.returncode = -9
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+    monkeypatch.setattr(server.subprocess, "Popen", FakePopen)
+    server.dispatch_task_worker(task_id)
+    after = _task(task_id)
+    assert after["execution_state"] == "succeeded"
+    assert after["status"] == "待人工审查"
+    assert after["execution_tool"] == "Codex->Claude Code"
+    assert "good ok" in (after["execution_output"] or "")
+    assert "故障转移" in (after["execution_progress"] or "")
+
+
 def test_dispatch_worker_build_error_to_unsupported(isolated_env, monkeypatch: pytest.MonkeyPatch):
     task_id = _new_task(assignee_ai="Cursor")
     monkeypatch.setattr(server, "build_tool_run_command", lambda tool, prompt: (None, "不支持"))
@@ -166,4 +215,3 @@ def test_dispatch_worker_timeout_path(isolated_env, monkeypatch: pytest.MonkeyPa
     assert after["execution_state"] == "failed"
     assert "执行超时" in (after["execution_error"] or "")
     assert after["status"] == "AI执行中"
-

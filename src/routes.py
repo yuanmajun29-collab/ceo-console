@@ -24,6 +24,77 @@ from .projects import *
 from .tasks import *
 from .tools import *
 from .tools import _TOOL_STATUS_CACHE
+from .config import _ACP_DISCOVERY_CACHE
+
+_ACP_DISCOVERY_REFRESH_LOCK = threading.Lock()
+
+
+def invalidate_tools_status_cache() -> None:
+    _TOOL_STATUS_CACHE["ts"] = None
+    _TOOL_STATUS_CACHE["data"] = None
+
+
+def refresh_acp_discovery_from_status(force: bool = False, timeout: int = 8) -> dict[str, Any]:
+    scripts = get_acp_scripts()
+    company_dir, _ = resolve_company_dir()
+    status_script = scripts["status"]
+    result: dict[str, Any] = {
+        "ok": False,
+        "stdout": "",
+        "stderr": "",
+        "skipped": False,
+        "refreshed": False,
+        "removed_tools": [],
+        "added_tools": [],
+    }
+
+    if not status_script["exists"] or not status_script["executable"]:
+        before = set(get_acp_agent_registry().keys())
+        clear_acp_discovery_cache()
+        after = set(get_acp_agent_registry().keys())
+        if before != after:
+            invalidate_tools_status_cache()
+        result["stderr"] = "未找到可执行的 acp-all-status。"
+        result["removed_tools"] = sorted(before - after)
+        return result
+
+    with _ACP_DISCOVERY_REFRESH_LOCK:
+        age = acp_discovery_cache_age_seconds()
+        if not force and age is not None and age < max(0, ACP_DISCOVERY_REFRESH_SECONDS):
+            result["ok"] = True
+            result["skipped"] = True
+            result["stdout"] = _ACP_DISCOVERY_CACHE.get("stdout") or ""
+            return result
+
+        before = set(get_acp_agent_registry().keys())
+        try:
+            proc = subprocess.run(
+                [status_script["path"]],
+                cwd=str(company_dir),
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                capture_output=True,
+                timeout=timeout,
+            )
+        except Exception as exc:
+            result["stderr"] = str(exc)
+            return result
+
+        stdout = proc.stdout or ""
+        stderr = proc.stderr or ""
+        result["ok"] = proc.returncode == 0
+        result["stdout"] = stdout
+        result["stderr"] = stderr
+        result["refreshed"] = True
+        get_acp_agent_registry(stdout)
+        after = set(get_acp_agent_registry().keys())
+        result["removed_tools"] = sorted(before - after)
+        result["added_tools"] = sorted(after - before)
+        if before != after:
+            invalidate_tools_status_cache()
+        return result
+
 
 @app.route("/")
 def dashboard() -> str:
@@ -178,6 +249,7 @@ def api_reports_operations():
 
 @app.route("/api/tools/status")
 def api_tools_status():
+    refresh_acp_discovery_from_status(timeout=10)
     return jsonify(get_tools_status_cached())
 
 
@@ -185,46 +257,27 @@ def api_tools_status():
 def api_acp_status():
     company_dir, source = resolve_company_dir()
     scripts = get_acp_scripts()
+    refresh = refresh_acp_discovery_from_status(force=True, timeout=25)
     body: dict[str, Any] = {
         "company_dir": str(company_dir),
         "source": source,
         "scripts": scripts,
-        "ok": False,
-        "stdout": "",
-        "stderr": "",
+        "ok": refresh["ok"],
+        "stdout": (refresh["stdout"] or "")[-12000:],
+        "stderr": (refresh["stderr"] or "")[-4000:],
+        "refreshed": refresh["refreshed"],
+        "skipped": refresh["skipped"],
+        "removed_tools": refresh["removed_tools"],
+        "added_tools": refresh["added_tools"],
         "tools": get_acp_agent_registry(),
     }
-    status_script = scripts["status"]
-    if not status_script["exists"] or not status_script["executable"]:
-        body["stderr"] = "未找到可执行的 acp-all-status。"
-        return jsonify(body)
-    try:
-        result = subprocess.run(
-            [status_script["path"]],
-            cwd=str(company_dir),
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            capture_output=True,
-            timeout=25,
-        )
-    except Exception as exc:
-        body["stderr"] = str(exc)
-        return jsonify(body)
-    stdout = result.stdout or ""
-    stderr = result.stderr or ""
-    body["ok"] = result.returncode == 0
-    body["stdout"] = stdout[-12000:]
-    body["stderr"] = stderr[-4000:]
-    body["tools"] = get_acp_agent_registry(stdout)
-    _TOOL_STATUS_CACHE["ts"] = None
-    _TOOL_STATUS_CACHE["data"] = None
     return jsonify(body)
 
 
 @app.route("/api/acp/summary")
 def api_acp_summary():
     company_dir, source = resolve_company_dir()
+    refresh = refresh_acp_discovery_from_status(timeout=10)
     scripts = get_acp_scripts()
     enabled = bool(scripts["agent"]["exists"] and scripts["agent"]["executable"])
     registry = get_acp_agent_registry()
@@ -237,6 +290,14 @@ def api_acp_summary():
             "company_dir": str(company_dir),
             "source": source,
             "ok": enabled,
+            "discovery": {
+                "refreshed": refresh["refreshed"],
+                "skipped": refresh["skipped"],
+                "removed_tools": refresh["removed_tools"],
+                "added_tools": refresh["added_tools"],
+                "last_checked_at": _ACP_DISCOVERY_CACHE.get("ts"),
+                "stderr": (refresh["stderr"] or "")[-1000:],
+            },
             "scripts": scripts,
             "tools": tools,
         }
@@ -252,10 +313,10 @@ def api_acp_token_routing():
     locked_scope = request.args.get("locked_scope", "")
     acceptance = request.args.get("acceptance_criteria", "")
     plans = {
-        key: token_optimized_pipeline(key, project=project)
+        key: token_optimized_pipeline(key, project=project, apply_availability=True)
         for key in sorted(ALLOWED_TASK_TYPE)
     }
-    current = token_optimized_pipeline(task_type, title, notes, locked_scope, acceptance, project)
+    current = token_optimized_pipeline(task_type, title, notes, locked_scope, acceptance, project, apply_availability=True)
     return jsonify(
         {
             "current": current,
@@ -376,10 +437,9 @@ def api_create_task():
         assignee_ai = "Other"
     routing_reason = ""
     if bool(data.get("auto_route")) or assignee_ai == "Other":
-        route_plan = token_optimized_pipeline(task_type, title, f"{notes} {ai_instruction}", locked_scope, acceptance_criteria, project)
+        route_plan = token_optimized_pipeline(task_type, title, f"{notes} {ai_instruction}", locked_scope, acceptance_criteria, project, apply_availability=True)
         assignee_ai = route_plan["primary_tool"]
-        pipeline_text = " → ".join(step["tool"] for step in route_plan["pipeline"])
-        routing_reason = f"{route_plan['reason']} Token 优先链路：{pipeline_text}。"
+        routing_reason = format_route_plan_reason(route_plan)
 
     ts = now_str()
     with closing(db_conn()) as conn:
@@ -576,10 +636,10 @@ def api_route_task(task_id: int):
             row["locked_scope"] or "",
             row["acceptance_criteria"] or "",
             row["project"] or "",
+            apply_availability=True,
         )
         tool = plan["primary_tool"]
-        pipeline_text = " → ".join(step["tool"] for step in plan["pipeline"])
-        reason = f"{plan['reason']} Token 优先链路：{pipeline_text}。"
+        reason = format_route_plan_reason(plan)
         conn.execute(
             "UPDATE tasks SET assignee_ai = ?, routing_reason = ?, updated_at = ? WHERE id = ?",
             (tool, reason, now_str(), task_id),
@@ -620,10 +680,11 @@ def api_retry_task(task_id: int):
             row["locked_scope"] or "",
             row["acceptance_criteria"] or "",
             row["project"] or "",
+            apply_availability=True,
         )
         routed_tool = route_plan["primary_tool"]
-        pipeline_text = " → ".join(step["tool"] for step in route_plan["pipeline"])
-        routing_reason = f"{route_plan['reason']} Token 优先链路：{pipeline_text}。"
+        pipeline_text = " → ".join(step["tool"] for step in (route_plan.get("execution_pipeline") or route_plan.get("pipeline") or []))
+        routing_reason = format_route_plan_reason(route_plan)
         conn.execute(
             """
             UPDATE tasks
@@ -851,6 +912,7 @@ def api_health():
 @app.route("/api/settings", methods=["GET", "PATCH"])
 def api_settings():
     if request.method == "GET":
+        refresh_acp_discovery_from_status(timeout=10)
         return jsonify(
             {
                 "settings": load_settings(),
@@ -886,6 +948,6 @@ def api_settings_reset():
 
 @app.route("/api/settings/refresh-tools", methods=["POST"])
 def api_settings_refresh_tools():
-    _TOOL_STATUS_CACHE["ts"] = None
-    _TOOL_STATUS_CACHE["data"] = None
+    refresh_acp_discovery_from_status(force=True, timeout=15)
+    invalidate_tools_status_cache()
     return jsonify({"ok": True, "tools": get_tools_status_cached()})

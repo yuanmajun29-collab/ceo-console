@@ -840,7 +840,9 @@
     const toolLabels = {"Claude Code":"本地 LLM","Codex":"代码生成助手","Gemini":"向量检索 / 研究","Antigravity":"任务调度服务","Cursor":"人工精修入口","Other":"本地运行环境"};
     function orderedToolNames(includeOther=false){
       const acpTools = Object.keys((acpStatus || {}).tools || {});
-      const names = [...coreToolOrder, ...Object.keys(toolsStatus || {}), ...acpTools, ...(allowedAssigneeAI || [])]
+      const detected = [...coreToolOrder, ...Object.keys(toolsStatus || {}), ...acpTools].filter(Boolean);
+      const allowed = (allowedAssigneeAI || []).filter(name => name === "Other" || detected.includes(name));
+      const names = [...detected, ...allowed]
         .filter(name => includeOther || name !== "Other");
       return [...new Set(names)].filter(Boolean);
     }
@@ -886,8 +888,9 @@
         const info = toolsStatus[name] || {};
         return tool.configured || info.acp_enabled || info.acp_configured;
       }).length;
+      const removed = (((acpStatus || {}).discovery || {}).removed_tools || []).filter(name => !coreToolOrder.includes(name));
       qs("toolsAcpSummary").textContent = agent.executable ? `${connected}/${names.length}` : "未接入";
-      qs("toolsAcpHint").textContent = agent.executable ? `已发现 ${names.length} 个 Agent` : "等待 ACP Agent";
+      qs("toolsAcpHint").textContent = agent.executable ? (removed.length ? `已移除 ${removed.join("、")}，页面已同步` : `已发现 ${names.length} 个 Agent`) : "等待 ACP Agent";
       qs("acpStatusPill").textContent = agent.executable ? (acpStatus.ok ? "互通正常" : "已接入，需体检") : "未接入";
       qs("acpStatusPill").className = `pill ${agent.executable ? (acpStatus.ok ? "p-green" : "p-orange") : "p-red"}`;
       qs("acpToolRows").innerHTML = names.map(name => {
@@ -902,11 +905,15 @@
 
     function renderTokenRouting(){
       const current = tokenRouting.current || {};
-      const chain = current.pipeline || [];
+      const strategic = current.pipeline || [];
+      const executable = (current.execution_pipeline || []).length ? current.execution_pipeline : strategic;
+      const skipped = current.skipped_tools || [];
+      const chain = executable;
       qs("toolsRoutingCount").textContent = `${chain.length || 0} 步`;
-      qs("toolsRoutingHint").textContent = current.reason || "等待策略生成";
+      qs("toolsRoutingHint").textContent = skipped.length ? `已跳过 ${skipped.length} 个不可用节点` : (current.reason || "等待策略生成");
       qs("tokenRoutingChain").innerHTML = chain.map(step => `<span class="pill blue-tag">${esc(step.tool)} · ${esc(step.role || "")}</span>`).join(" <span>→</span> ") || `<span class="pill">等待策略</span>`;
-      qs("tokenRoutingReason").textContent = current.reason || "按任务类型自动生成最小上下文链路";
+      const skippedText = skipped.length ? ` 已跳过：${skipped.slice(0,4).map(item => `${item.tool}(${item.reason})`).join("；")}` : "";
+      qs("tokenRoutingReason").textContent = `${current.reason || "按任务类型自动生成最小上下文链路"}${skippedText}`;
     }
 
     function renderCommandCenter(){
@@ -1448,6 +1455,7 @@
       }
     }
     async function loadAcpStatus(){
+      const before = new Set(orderedToolNames(false));
       acpStatus = await fetchJSON("/api/acp/status");
       const refreshed = await fetchJSON("/api/settings/refresh-tools", {method:"POST"});
       toolsStatus = refreshed.tools || toolsStatus;
@@ -1455,7 +1463,9 @@
       renderTools();
       renderSettings();
       applySettingsToQuickCreate();
-      toast(acpStatus.ok ? "ACP Agent 互通正常" : "ACP 体检完成，请查看状态");
+      const after = new Set(orderedToolNames(false));
+      const removed = [...before].filter(name => !after.has(name) && !coreToolOrder.includes(name));
+      toast(removed.length ? `已同步移除：${removed.join("、")}` : (acpStatus.ok ? "ACP Agent 互通正常" : "ACP 体检完成，请查看状态"));
     }
     function toggleDirtyRepos(){
       onlyDirtyRepos = !onlyDirtyRepos;

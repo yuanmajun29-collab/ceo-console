@@ -115,14 +115,66 @@ def build_tool_run_command(tool_name: str, prompt: str) -> tuple[list[str] | Non
     return [cmd_path, prompt], None
 
 
+BACKGROUND_UNSUPPORTED_TOOLS = {"Cursor", "Other"}
+TASK_TYPE_FALLBACK_TOOLS = {
+    "market_research": ["Gemini", "Claude Code", "Codex", "Antigravity"],
+    "architecture": ["Claude Code", "Gemini", "Codex", "Antigravity"],
+    "fullstack": ["Antigravity", "Codex", "Claude Code", "Gemini"],
+    "code_edit": ["Codex", "Claude Code", "Gemini", "Antigravity"],
+    "testing": ["Codex", "Claude Code", "Gemini", "Antigravity"],
+    "docs": ["Codex", "Claude Code", "Gemini", "Antigravity"],
+    "security_review": ["Gemini", "Claude Code", "Codex", "Antigravity"],
+    "quality_review": ["Claude Code", "Gemini", "Codex", "Antigravity"],
+    "delivery": ["Codex", "Claude Code", "Gemini", "Antigravity"],
+}
+DEFAULT_BACKGROUND_FALLBACK_TOOLS = ["Codex", "Claude Code", "Gemini", "Antigravity"]
+
+
+def dedupe_tools(tools: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for tool in tools:
+        if not tool or tool in seen:
+            continue
+        seen.add(tool)
+        out.append(tool)
+    return out
+
+
+def is_runnable_tool(tool_name: str, status: dict[str, Any] | None = None) -> bool:
+    if tool_name in BACKGROUND_UNSUPPORTED_TOOLS:
+        return False
+    info = (status or get_tools_status_cached()).get(tool_name) or {}
+    return bool(info.get("available") and info.get("runnable"))
+
+
+def tool_unavailable_reason(tool_name: str, status: dict[str, Any] | None = None) -> str:
+    if tool_name == "Other":
+        return "未指定具体后台工具"
+    if tool_name == "Cursor":
+        return "Cursor 当前作为人工精修入口，不参与后台自动调度"
+    info = (status or {}).get(tool_name)
+    if not info:
+        return "未纳入工具状态监测"
+    if not info.get("available"):
+        return "命令或 ACP 目标不可用"
+    if not info.get("runnable"):
+        return str(info.get("reason") or "不支持后台无头调度")
+    return "可调度"
+
+
+def fallback_tools_for_task(task_type: str | None) -> list[str]:
+    normalized = normalize_task_type(task_type)
+    return TASK_TYPE_FALLBACK_TOOLS.get(normalized, DEFAULT_BACKGROUND_FALLBACK_TOOLS)
+
+
 def pick_fallback_tool(preferred_tools: list[str] | None = None) -> tuple[str | None, str | None]:
-    ordered = preferred_tools or ["Claude Code", "Gemini"]
+    ordered = preferred_tools or DEFAULT_BACKGROUND_FALLBACK_TOOLS
     status = get_tools_status_cached()
     for tool in ordered:
-        info = status.get(tool) or {}
-        if info.get("available") and info.get("runnable"):
+        if is_runnable_tool(tool, status):
             return tool, None
-    return None, "未找到可自动调度的后备工具（需要可运行的 Claude Code 或 Gemini）"
+    return None, "未找到可自动调度的后备工具"
 
 
 def check_command_runnable(path: str) -> tuple[bool, str | None]:
@@ -419,6 +471,119 @@ def adapt_pipeline_for_project(
     return preferred_tool, pipeline, note
 
 
+def tool_route_item(tool: str, index: int, primary_tool: str, status: dict[str, Any] | None = None) -> dict[str, Any]:
+    info = (status or {}).get(tool) or {}
+    return {
+        "tool": tool,
+        "acp_target": info.get("acp_target") or ACP_TOOL_TARGET.get(tool) or (get_acp_agent_registry().get(tool) or {}).get("target"),
+        "token_cost": TOOL_TOKEN_PROFILE.get(tool, {}).get("cost"),
+        "tier": TOOL_TOKEN_PROFILE.get(tool, {}).get("tier"),
+        "role": pipeline_role(tool, index, primary_tool),
+        "available": info.get("available"),
+        "runnable": info.get("runnable"),
+        "source": info.get("source"),
+    }
+
+
+def route_candidate_order(
+    task_type: str,
+    preferred_tool: str,
+    pipeline: list[str],
+    status: dict[str, Any] | None = None,
+) -> list[str]:
+    dynamic_runnable = []
+    if status:
+        dynamic_runnable = [
+            name for name, info in status.items()
+            if name not in ALLOWED_AI and info.get("available") and info.get("runnable")
+        ]
+    return dedupe_tools([preferred_tool, *fallback_tools_for_task(task_type), *pipeline, *dynamic_runnable])
+
+
+def apply_route_availability(
+    task_type: str,
+    preferred_tool: str,
+    pipeline: list[str],
+    status: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if status is None:
+        return {
+            "primary_tool": preferred_tool,
+            "execution_pipeline": [tool_route_item(tool, idx, preferred_tool) for idx, tool in enumerate(pipeline)],
+            "dispatch_candidates": pipeline[:],
+            "skipped_tools": [],
+            "availability_checked": False,
+            "fallback_applied": False,
+        }
+
+    candidates = route_candidate_order(task_type, preferred_tool, pipeline, status)
+    execution_pipeline: list[dict[str, Any]] = []
+    skipped_tools: list[dict[str, Any]] = []
+    for tool in candidates:
+        if is_runnable_tool(tool, status):
+            execution_pipeline.append(tool_route_item(tool, len(execution_pipeline), preferred_tool, status))
+        else:
+            skipped_tools.append({"tool": tool, "reason": tool_unavailable_reason(tool, status)})
+
+    selected = execution_pipeline[0]["tool"] if execution_pipeline else preferred_tool
+    return {
+        "primary_tool": selected,
+        "execution_pipeline": execution_pipeline,
+        "dispatch_candidates": [step["tool"] for step in execution_pipeline],
+        "skipped_tools": skipped_tools,
+        "availability_checked": True,
+        "fallback_applied": selected != preferred_tool,
+    }
+
+
+def format_route_plan_reason(plan: dict[str, Any]) -> str:
+    strategic = " → ".join(step["tool"] for step in plan.get("pipeline", [])) or plan.get("primary_tool", "-")
+    execution = " → ".join(step["tool"] for step in plan.get("execution_pipeline", [])) or "暂无可执行节点"
+    reason = f"{plan.get('reason') or ''} Token 优先链路：{strategic}。可执行链路：{execution}。"
+    if plan.get("fallback_applied"):
+        reason += f"主节点 {plan.get('recommended_tool')} 当前不可用，已自动切换到 {plan.get('primary_tool')}。"
+    skipped = plan.get("skipped_tools") or []
+    if skipped:
+        short = "；".join(f"{item['tool']}：{item['reason']}" for item in skipped[:4])
+        suffix = "；..." if len(skipped) > 4 else ""
+        reason += f"已跳过不可用节点：{short}{suffix}。"
+    return re.sub(r"\s+", " ", reason).strip()
+
+
+def dispatch_candidate_plan(task: Any) -> dict[str, Any]:
+    requested_tool = task["assignee_ai"] if isinstance(task, sqlite3.Row) else task.get("assignee_ai")
+    task_type = task["task_type"] if isinstance(task, sqlite3.Row) else task.get("task_type")
+    title = task["title"] if isinstance(task, sqlite3.Row) else task.get("title", "")
+    notes = task["notes"] if isinstance(task, sqlite3.Row) else task.get("notes", "")
+    ai_instruction = task["ai_instruction"] if isinstance(task, sqlite3.Row) else task.get("ai_instruction", "")
+    locked_scope = task["locked_scope"] if isinstance(task, sqlite3.Row) else task.get("locked_scope", "")
+    acceptance = task["acceptance_criteria"] if isinstance(task, sqlite3.Row) else task.get("acceptance_criteria", "")
+    project = task["project"] if isinstance(task, sqlite3.Row) else task.get("project", "")
+    plan = token_optimized_pipeline(
+        task_type,
+        title or "",
+        f"{notes or ''} {ai_instruction or ''}",
+        locked_scope or "",
+        acceptance or "",
+        project or "",
+        apply_availability=True,
+    )
+    status = get_tools_status_cached()
+    candidates = dedupe_tools([requested_tool, *plan.get("dispatch_candidates", []), *fallback_tools_for_task(task_type)])
+    runnable = [tool for tool in candidates if is_runnable_tool(tool, status)]
+    skipped = [
+        {"tool": tool, "reason": tool_unavailable_reason(tool, status)}
+        for tool in candidates
+        if tool not in runnable
+    ]
+    return {
+        "routing_plan": plan,
+        "candidates": runnable,
+        "skipped": skipped,
+        "requested_tool": requested_tool,
+    }
+
+
 def token_optimized_pipeline(
     task_type: str | None,
     title: str = "",
@@ -426,6 +591,7 @@ def token_optimized_pipeline(
     locked_scope: str = "",
     acceptance: str = "",
     project: str = "",
+    apply_availability: bool = False,
 ) -> dict[str, Any]:
     normalized = normalize_task_type(task_type)
     context = estimate_context_size(title, notes, locked_scope, acceptance)
@@ -450,22 +616,35 @@ def token_optimized_pipeline(
         if not deduped or deduped[-1] != tool:
             deduped.append(tool)
 
+    status = None
+    availability_error = None
+    if apply_availability:
+        try:
+            status = get_tools_status_cached()
+        except Exception as exc:
+            availability_error = str(exc)
+            status = None
+
+    availability = apply_route_availability(normalized, preferred_tool, deduped, status)
+    primary_tool = availability["primary_tool"]
+
     return {
         "task_type": normalized,
-        "primary_tool": preferred_tool,
+        "recommended_tool": preferred_tool,
+        "primary_tool": primary_tool,
         "reason": reason,
         "context": context,
         "project_profile": project_profile,
         "pipeline": [
-            {
-                "tool": tool,
-                "acp_target": ACP_TOOL_TARGET.get(tool),
-                "token_cost": TOOL_TOKEN_PROFILE.get(tool, {}).get("cost"),
-                "tier": TOOL_TOKEN_PROFILE.get(tool, {}).get("tier"),
-                "role": pipeline_role(tool, idx, preferred_tool),
-            }
+            tool_route_item(tool, idx, preferred_tool, status)
             for idx, tool in enumerate(deduped)
         ],
+        "execution_pipeline": availability["execution_pipeline"],
+        "dispatch_candidates": availability["dispatch_candidates"],
+        "skipped_tools": availability["skipped_tools"],
+        "availability_checked": availability["availability_checked"],
+        "availability_error": availability_error,
+        "fallback_applied": availability["fallback_applied"],
         "token_policy": [
             "先摘要、后执行：大上下文任务先由 Codex 提炼范围和验收点。",
             "先局部、后全栈：单文件/小范围改动不启动 Antigravity。",
