@@ -26,6 +26,7 @@ DEFAULT_RECHARGE_URLS = {
     "Gemini": "https://ai.google.dev/gemini-api/docs/billing",
     "Antigravity": "https://antigravity.com/pricing",
     "Cursor": "https://cursor.com/pricing",
+    "DeepSeek V4-Pro": "https://platform.deepseek.com/usage",
 }
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5050
@@ -34,7 +35,7 @@ ACP_DISCOVERY_REFRESH_SECONDS = int(os.getenv("CEO_CONSOLE_ACP_DISCOVERY_REFRESH
 
 ALLOWED_STATUS = {"待分配", "AI执行中", "待人工审查", "已完成"}
 ALLOWED_PRIORITY = {"P0", "P1", "P2"}
-ALLOWED_AI = {"Antigravity", "Claude Code", "Cursor", "Codex", "Gemini", "Other"}
+ALLOWED_AI = {"Antigravity", "Claude Code", "Cursor", "Codex", "Gemini", "DeepSeek V4-Pro", "Other"}
 ALLOWED_EXEC_STATE = {"idle", "running", "succeeded", "failed", "unsupported"}
 ALLOWED_TASK_TYPE = {
     "market_research",
@@ -46,6 +47,12 @@ ALLOWED_TASK_TYPE = {
     "security_review",
     "quality_review",
     "delivery",
+    "customer_triage",
+    "contract_review",
+    "bookkeeping",
+    "finance_report",
+    "marketing_content",
+    "social_monitor",
 }
 PROJECT_NAME_RE = re.compile(r"^[A-Za-z0-9._\-\u4e00-\u9fff]{1,80}$")
 TASK_TYPE_TOOL_ROUTE = {
@@ -58,6 +65,12 @@ TASK_TYPE_TOOL_ROUTE = {
     "security_review": ("Gemini", "安全/风险面扫描使用 Gemini，但限制为摘要式审查，避免全量代码粘贴。"),
     "quality_review": ("Claude Code", "代码质量和架构一致性审查使用 Claude Code，仅传 diff/关键文件。"),
     "delivery": ("Codex", "交付包、变更说明和验收材料默认交给 Codex。"),
+    "customer_triage": ("Gemini", "客户沟通记录通常上下文长且来源多，先用 Gemini 汇总，再交 DeepSeek 低成本分类与草拟回复。"),
+    "contract_review": ("Claude Code", "合同条款审查属于高风险逻辑判断，使用 Claude Code 标注风险，DeepSeek 负责整理摘要。"),
+    "bookkeeping": ("DeepSeek V4-Pro", "票据与流水归档属于高频结构化任务，优先用 DeepSeek V4-Pro 控制成本，必要时调用 Gemini 识别图片。"),
+    "finance_report": ("Claude Code", "现金流与异常支出分析需要严谨推理，使用 Claude Code 生成问诊式财务结论。"),
+    "marketing_content": ("DeepSeek V4-Pro", "营销内容生产以 DeepSeek V4-Pro 批量初稿控成本，再由 Claude Code 做精修。"),
+    "social_monitor": ("Gemini", "社媒监听需要广域搜索和长上下文归纳，使用 Gemini 发现机会，再由 Claude Code 判断是否参与。"),
 }
 ACP_TOOL_TARGET = {
     "Cursor": "cursor",
@@ -65,6 +78,7 @@ ACP_TOOL_TARGET = {
     "Claude Code": "claude",
     "Codex": "codex",
     "Gemini": "gemini",
+    "DeepSeek V4-Pro": "deepseek-v4-pro",
 }
 CORE_AI_TOOLS = tuple(ACP_TOOL_TARGET.keys())
 ACP_AGENT_NAME_ALIASES = {
@@ -77,6 +91,11 @@ ACP_AGENT_NAME_ALIASES = {
     "Antigravity": "Antigravity",
     "OpenClaw": "Antigravity",
     "Hermes": "Hermes",
+    "DeepSeek": "DeepSeek V4-Pro",
+    "DeepSeek V4": "DeepSeek V4-Pro",
+    "DeepSeek V4-Pro": "DeepSeek V4-Pro",
+    "Deepseek V4 Pro": "DeepSeek V4-Pro",
+    "deepspeek-v4-pro": "DeepSeek V4-Pro",
 }
 ACP_NON_AGENT_NAMES = {"coordinator", "项目目录", "INFO", "WARN", "ERROR"}
 _ACP_DISCOVERY_CACHE: dict[str, Any] = {"tools": {}, "stdout": "", "ts": None, "ts_epoch": None, "company_dir": None}
@@ -86,6 +105,12 @@ TOOL_TOKEN_PROFILE = {
         "tier": "low",
         "best_for": ["局部代码修改", "测试验证", "文档交付", "批量命令", "交付整理"],
         "avoid_for": ["大范围竞品调研", "需要产品/架构深推理的模糊任务"],
+    },
+    "DeepSeek V4-Pro": {
+        "cost": 1,
+        "tier": "low-cost-generalist",
+        "best_for": ["日常代码生成", "单元测试草稿", "客户/营销文本初稿", "票据结构化", "低成本批量摘要"],
+        "avoid_for": ["高风险合同结论", "最终架构裁决", "需要多模态识别且未提供结构化输入"],
     },
     "Gemini": {
         "cost": 2,
@@ -122,6 +147,71 @@ TASK_TYPE_PIPELINE = {
     "security_review": ["Codex", "Gemini", "Codex"],
     "quality_review": ["Codex", "Claude Code"],
     "delivery": ["Codex"],
+    "customer_triage": ["Gemini", "DeepSeek V4-Pro", "Claude Code"],
+    "contract_review": ["Claude Code", "DeepSeek V4-Pro", "Codex"],
+    "bookkeeping": ["Gemini", "DeepSeek V4-Pro", "Codex"],
+    "finance_report": ["DeepSeek V4-Pro", "Claude Code", "Codex"],
+    "marketing_content": ["Gemini", "DeepSeek V4-Pro", "Claude Code"],
+    "social_monitor": ["Gemini", "Claude Code", "DeepSeek V4-Pro"],
+}
+
+BUSINESS_MODULES = {
+    "project": {
+        "name": "项目交付",
+        "tagline": "从需求、设计、开发、测试到交付的自动巡航",
+        "task_types": ["market_research", "architecture", "fullstack", "code_edit", "testing", "docs", "security_review", "quality_review", "delivery"],
+        "toolchain": ["Antigravity", "OpenClaw", "Codex", "Claude Code", "Gemini"],
+        "ceo_actions": ["批准技术方案", "验收交付", "接受风险"],
+        "default_task_type": "fullstack",
+        "task_template": {
+            "title": "项目交付巡航与阻塞清理",
+            "priority": "P1",
+            "instruction": "扫描当前项目任务、仓库变更、失败调度与待评审队列，给出下一步推进计划；可自动处理低风险测试、文档和小范围代码任务，关键变更等待 CEO 审批。",
+            "expected_output": "项目巡航报告、阻塞清单、建议执行任务与验证结果",
+        },
+    },
+    "customer": {
+        "name": "客户管理",
+        "tagline": "自动识别客户情绪、商机、投诉与合同风险",
+        "task_types": ["customer_triage", "contract_review"],
+        "toolchain": ["Hermes", "Gemini", "DeepSeek V4-Pro", "Claude Code"],
+        "ceo_actions": ["批准回复", "要求重写", "接受合同风险"],
+        "default_task_type": "customer_triage",
+        "task_template": {
+            "title": "今日客户情绪与待办巡航",
+            "priority": "P0",
+            "instruction": "汇总今日客户沟通记录，识别退款、询价、投诉、Bug 反馈和合同风险；为低风险事项生成回复草稿，高风险事项进入 CEO 待决策队列。",
+            "expected_output": "客户情绪日报、风险客户清单、建议回复草稿、CEO 决策项",
+        },
+    },
+    "finance": {
+        "name": "财务问诊",
+        "tagline": "票据归档、流水分类、现金流预测与异常支出预警",
+        "task_types": ["bookkeeping", "finance_report"],
+        "toolchain": ["Gemini", "DeepSeek V4-Pro", "Claude Code", "Codex"],
+        "ceo_actions": ["确认入账", "批准预算", "暂停订阅"],
+        "default_task_type": "finance_report",
+        "task_template": {
+            "title": "现金流与票据巡航",
+            "priority": "P1",
+            "instruction": "检查本期票据、流水、订阅支出和现金流趋势；普通归档走 DeepSeek 低成本结构化，高风险现金流结论交 Claude Code 复核。",
+            "expected_output": "财务健康摘要、异常支出清单、现金流预测、需要 CEO 确认的入账项",
+        },
+    },
+    "marketing": {
+        "name": "营销推广",
+        "tagline": "内容车间、SEO 主题、社媒监听与回复建议",
+        "task_types": ["marketing_content", "social_monitor", "market_research"],
+        "toolchain": ["Gemini", "DeepSeek V4-Pro", "Claude Code", "Hermes"],
+        "ceo_actions": ["批准发布", "修改语气", "选择渠道"],
+        "default_task_type": "marketing_content",
+        "task_template": {
+            "title": "本周内容车间与社媒机会巡航",
+            "priority": "P1",
+            "instruction": "围绕当前产品和项目进展生成内容主题、文章初稿、短文案与社媒互动建议；DeepSeek 批量出初稿，Claude 做最终润色，发布前等待 CEO 批准。",
+            "expected_output": "内容选题、营销文案初稿、社媒机会清单、发布前审批项",
+        },
+    },
 }
 
 
@@ -196,6 +286,9 @@ def display_name_from_acp_target(target: str) -> str:
         "gemini-cli": "Gemini",
         "antigravity": "Antigravity",
         "hermes": "Hermes",
+        "deepseek": "DeepSeek V4-Pro",
+        "deepseek-v4": "DeepSeek V4-Pro",
+        "deepseek-v4-pro": "DeepSeek V4-Pro",
     }
     value = target.strip().lower()
     if value in alias:

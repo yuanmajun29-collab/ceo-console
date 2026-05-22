@@ -1,10 +1,16 @@
 # CEO Operations and AI Tool Dispatch Playbook
 
-This playbook defines how the one-person-company CEO operates projects through CEO Console and dispatches Cursor, Antigravity, Claude Code, Gemini, and Codex.
+This playbook defines how the one-person-company CEO operates projects through CEO Console and dispatches Cursor, Antigravity/OpenClaw, Hermes, Claude Code, Gemini, Codex, and DeepSeek V4-Pro.
 
 The principle is simple:
 
 > The CEO makes decisions. The platform coordinates AI execution.
+
+CEO Console should hide direct tool operation from the CEO. The CEO only needs to:
+
+- 看: read operating dashboards, patrol reports, risk cards, and pending approvals.
+- 说: issue natural-language goals, review comments, and business instructions.
+- 点: approve, reject, retry, publish, merge, or confirm bookkeeping.
 
 ## 1. CEO Control Framework
 
@@ -102,6 +108,7 @@ Tool dispatch:
 | Tool | Role | Best Use |
 | --- | --- | --- |
 | Gemini | Market researcher / broad analyst | Competitor scan, reference implementation research, alternative approaches |
+| DeepSeek V4-Pro | Low-cost draft and structuring engine | Routine summaries, drafts, bookkeeping normalization, bulk first-pass analysis |
 | Claude Code | System architect | Technical design, data model, module boundary, architecture decisions |
 
 Output artifacts:
@@ -128,10 +135,12 @@ Tool dispatch:
 | Tool | Role | Best Use |
 | --- | --- | --- |
 | Antigravity / OpenClaw | Main full-stack executor | Independent feature modules, end-to-end local implementation |
+| Hermes | Agent steward / router | Multi-model routing, cross-agent handoff, scheduled business patrols |
 | Cursor | Precision editor | Small fixes, style cleanup, IDE-centered refactor, local code navigation |
 | Codex | Coding operator / sweeper | Tests, docs, repetitive edits, API polish, repository work |
 | Claude Code | Deep implementer | Complex logic, architecture-sensitive code, code review fixes |
 | Gemini | Fast reasoning assistant | Quick checks, external comparison, broad sanity review |
+| DeepSeek V4-Pro | Cost-control executor | High-volume drafts, simple code/test scaffolds, customer/marketing/bookkeeping text |
 
 Development rule:
 
@@ -251,13 +260,30 @@ Default routing:
 | Tests / docs / repetitive code changes | Codex | Claude Code |
 | Security or broad risk review | Gemini | Claude Code |
 | Final code-quality review | Claude Code | Codex |
+| Customer triage | Gemini | DeepSeek V4-Pro, Claude Code |
+| Contract review | Claude Code | DeepSeek V4-Pro, Codex |
+| Bookkeeping | DeepSeek V4-Pro | Gemini, Codex |
+| Finance report | Claude Code | DeepSeek V4-Pro, Codex |
+| Marketing content | DeepSeek V4-Pro | Claude Code, Gemini |
+| Social monitoring | Gemini | Claude Code, DeepSeek V4-Pro |
+
+## 7. Business Operating Domains
+
+CEO Console now treats the platform as a company operating cockpit, not only a project workbench.
+
+| Domain | Goal | Tool Combination | CEO Checkpoint |
+| --- | --- | --- | --- |
+| Project delivery | Create, design, develop, test, manage progress, and package delivery | Antigravity/OpenClaw -> Codex -> Claude Code/Gemini | Approve architecture, accept delivery, decide risk |
+| Customer management | Triage communications, detect churn/refund risk, draft replies, review contracts | Hermes -> Gemini -> DeepSeek V4-Pro -> Claude Code | Approve replies, accept contract risks |
+| Finance diagnosis | Normalize invoices and cashflow, detect abnormal spend, forecast runway | Gemini -> DeepSeek V4-Pro -> Claude Code -> Codex | Confirm bookkeeping, pause/approve spend |
+| Marketing growth | Generate content, monitor social channels, create reply drafts and campaign plans | Gemini -> DeepSeek V4-Pro -> Claude Code -> Hermes | Approve publish, choose channel and tone |
 
 Escalation rule:
 
 - If the chosen tool is unavailable or cannot run headlessly, fall back to Claude Code or Gemini when possible.
 - If two attempts fail, escalate to CEO with the error summary and suggested next action.
 
-## 7. What CEO Console Should Automate Next
+## 8. What CEO Console Should Automate Next
 
 Near-term platform features:
 
@@ -270,4 +296,3 @@ Near-term platform features:
 - Review checklist per task type.
 - Delivery package generator.
 - Daily and weekly brief generator.
-

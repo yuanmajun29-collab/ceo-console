@@ -4,7 +4,8 @@
 
 Functional requirements:
 
-- Integrate Cursor, Antigravity, Claude Code, Gemini, and Codex as executable AI workers.
+- Integrate Cursor, Antigravity/OpenClaw, Hermes, Claude Code, Gemini, Codex, and DeepSeek V4-Pro as executable or routable AI workers.
+- Manage business operating domains beyond engineering: project delivery, customer management, finance diagnosis, and marketing growth.
 - Manage the full project lifecycle: create, design, develop, manage, progress, review, deliver, archive.
 - Turn CEO intent into structured projects, milestones, tasks, acceptance criteria, and decision checkpoints.
 - Dispatch tasks to the best available tool and record command, output, error, progress, and review state.
@@ -31,9 +32,11 @@ flowchart TD
   Orchestrator --> Router["AI Tool Router"]
   Router --> Cursor["Cursor"]
   Router --> Antigravity["Antigravity / OpenClaw"]
+  Router --> Hermes["Hermes"]
   Router --> Claude["Claude Code"]
   Router --> Gemini["Gemini"]
   Router --> Codex["Codex"]
+  Router --> DeepSeek["DeepSeek V4-Pro"]
 
   ProjectAPI --> PM["pm script"]
   PM --> Workspace["~/company project workspaces"]
@@ -55,6 +58,7 @@ The UI is the command center. It should show:
 - Portfolio health
 - Project governance
 - Risk and reminders
+- One-person company operating cockpit
 - AI tool health
 - Work queue
 - Task detail and review
@@ -80,9 +84,11 @@ The router should classify tool strengths:
 
 - Cursor: IDE-centered coding and codebase navigation
 - Antigravity/OpenClaw: agentic local execution
+- Hermes: cross-agent stewardship and multi-model routing
 - Claude Code: deep code reasoning and implementation
 - Gemini: broad reasoning and quick headless turns
 - Codex: coding-oriented execution and repository work
+- DeepSeek V4-Pro: low-cost drafts, structured summaries, simple code/test scaffolding, marketing/customer/finance first passes
 
 Routing should consider task type, project context, tool availability, execution mode, past success rate, and required review depth.
 
@@ -122,7 +128,7 @@ Tradeoff:
 
 ### ADR-002: Tools are workers, not plugins only
 
-Decision: treat Cursor, Antigravity, Claude Code, Gemini, and Codex as AI workers with capabilities, availability, and execution modes.
+Decision: treat Cursor, Antigravity/OpenClaw, Hermes, Claude Code, Gemini, Codex, and DeepSeek V4-Pro as AI workers with capabilities, availability, execution modes, and cost profiles.
 
 Rationale:
 
@@ -167,13 +173,26 @@ The platform needs three control surfaces:
 - Task board: executable AI task cards with instructions, acceptance criteria, and review state.
 - Decision log: human decisions that guide future AI execution.
 
+The CEO interaction model is deliberately small:
+
+- 看: dashboards, risk cards, AI patrol reports, and decision queues.
+- 说: natural-language business goals, instructions, and review feedback.
+- 点: approve, reject, retry, publish, merge, or confirm bookkeeping.
+
 The platform also needs a tool routing layer:
 
 | Stage | Primary Tools | Purpose |
 | --- | --- | --- |
 | Concept and design | Gemini, Claude Code | Research, alternatives, architecture, decision proposals |
-| Core development | Antigravity, Cursor, Codex, Claude Code | Full-stack execution, precise edits, repetitive implementation, complex code |
+| Core development | Antigravity/OpenClaw, Cursor, Codex, Claude Code, DeepSeek V4-Pro | Full-stack execution, precise edits, repetitive implementation, complex code, low-cost first passes |
 | Review and acceptance | Gemini, Claude Code, Codex, CEO | Security review, code quality review, test/doc review, business acceptance |
+
+| Business Domain | Primary Combination | Purpose |
+| --- | --- | --- |
+| Project delivery | Antigravity/OpenClaw -> Codex -> Claude Code/Gemini | Build, verify, review, and package delivery |
+| Customer management | Hermes -> Gemini -> DeepSeek V4-Pro -> Claude Code | Triage messages, draft replies, review contracts |
+| Finance diagnosis | Gemini -> DeepSeek V4-Pro -> Claude Code -> Codex | Normalize receipts, classify spend, forecast cashflow |
+| Marketing growth | Gemini -> DeepSeek V4-Pro -> Claude Code -> Hermes | Research topics, draft content, polish, monitor social channels |
 
 The CEO should be interrupted only for:
 

@@ -6,6 +6,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 from contextlib import closing
@@ -26,6 +27,7 @@ def tool_candidates(tool_name: str) -> list[str]:
         "Antigravity": ["openclaw", "antigravity"],
         "Cursor": ["cursor", "cursor-agent"],
         "Hermes": ["hermes", "hermes-agent"],
+        "DeepSeek V4-Pro": ["deepseek", "deepseek-v4-pro"],
     }
     if tool_name in mapping:
         return mapping[tool_name]
@@ -62,7 +64,8 @@ def build_tool_run_command(tool_name: str, prompt: str) -> tuple[list[str] | Non
     acp_agent = acp_scripts["agent"]
     acp_entry = get_acp_agent_registry().get(tool_name) or {}
     acp_target = acp_entry.get("target") or ACP_TOOL_TARGET.get(tool_name)
-    if acp_target and acp_agent["exists"] and acp_agent["executable"]:
+    acp_configured_for_tool = bool(acp_entry.get("configured") or tool_name != "DeepSeek V4-Pro")
+    if acp_target and acp_agent["exists"] and acp_agent["executable"] and acp_configured_for_tool:
         agent_path = acp_agent["path"]
         if tool_name == "Claude Code":
             return [agent_path, acp_target, "-p", "--output-format", "text", prompt], None
@@ -89,10 +92,53 @@ def build_tool_run_command(tool_name: str, prompt: str) -> tuple[list[str] | Non
             if cmd_path:
                 return [cmd_path, "--accept-hooks", "-z", prompt], None
             return None, "Hermes 已检测到 ACP/Hook 配置，但 hermes 命令不可执行；请把 ~/.hermes/hermes-agent/venv/bin 加入 PATH。"
+        if tool_name == "DeepSeek V4-Pro":
+            return [agent_path, acp_target, prompt], None
         return [agent_path, acp_target, prompt], None
+
+    if tool_name == "DeepSeek V4-Pro":
+        api_key = os.getenv("CEO_CONSOLE_DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+        if api_key:
+            script = """
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+prompt = sys.argv[1]
+api_key = os.getenv("CEO_CONSOLE_DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+base_url = (os.getenv("CEO_CONSOLE_DEEPSEEK_BASE_URL") or "https://api.deepseek.com").rstrip("/")
+model = os.getenv("CEO_CONSOLE_DEEPSEEK_MODEL") or "deepseek-chat"
+payload = json.dumps({
+    "model": model,
+    "messages": [{"role": "user", "content": prompt}],
+    "temperature": 0.2,
+}, ensure_ascii=False).encode("utf-8")
+req = urllib.request.Request(
+    f"{base_url}/chat/completions",
+    data=payload,
+    headers={
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    },
+    method="POST",
+)
+try:
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        data = json.loads(resp.read().decode("utf-8", errors="replace"))
+except urllib.error.HTTPError as exc:
+    sys.stderr.write(exc.read().decode("utf-8", errors="replace"))
+    sys.exit(1)
+content = (((data.get("choices") or [{}])[0].get("message") or {}).get("content") or "").strip()
+print(content or json.dumps(data, ensure_ascii=False))
+""".strip()
+            return [sys.executable, "-c", script, prompt], None
 
     cmd_path = resolve_tool_command(tool_name)
     if not cmd_path:
+        if tool_name == "DeepSeek V4-Pro":
+            return None, "DeepSeek V4-Pro 未配置 ACP 目标、API Key 或本地 deepseek 命令；请设置 DEEPSEEK_API_KEY / CEO_CONSOLE_DEEPSEEK_API_KEY，或在 ACP 中接入 deepseek-v4-pro。"
         return None, f"未找到可执行命令候选：{tool_candidates(tool_name)}"
 
     # Prefer non-interactive execution where supported.
@@ -117,17 +163,23 @@ def build_tool_run_command(tool_name: str, prompt: str) -> tuple[list[str] | Non
 
 BACKGROUND_UNSUPPORTED_TOOLS = {"Cursor", "Other"}
 TASK_TYPE_FALLBACK_TOOLS = {
-    "market_research": ["Gemini", "Claude Code", "Codex", "Antigravity"],
-    "architecture": ["Claude Code", "Gemini", "Codex", "Antigravity"],
-    "fullstack": ["Antigravity", "Codex", "Claude Code", "Gemini"],
-    "code_edit": ["Codex", "Claude Code", "Gemini", "Antigravity"],
-    "testing": ["Codex", "Claude Code", "Gemini", "Antigravity"],
-    "docs": ["Codex", "Claude Code", "Gemini", "Antigravity"],
-    "security_review": ["Gemini", "Claude Code", "Codex", "Antigravity"],
-    "quality_review": ["Claude Code", "Gemini", "Codex", "Antigravity"],
-    "delivery": ["Codex", "Claude Code", "Gemini", "Antigravity"],
+    "market_research": ["Gemini", "DeepSeek V4-Pro", "Claude Code", "Codex", "Antigravity"],
+    "architecture": ["Claude Code", "Gemini", "Codex", "DeepSeek V4-Pro", "Antigravity"],
+    "fullstack": ["Antigravity", "Codex", "Claude Code", "DeepSeek V4-Pro", "Gemini"],
+    "code_edit": ["Codex", "DeepSeek V4-Pro", "Claude Code", "Gemini", "Antigravity"],
+    "testing": ["Codex", "DeepSeek V4-Pro", "Claude Code", "Gemini", "Antigravity"],
+    "docs": ["Codex", "DeepSeek V4-Pro", "Claude Code", "Gemini", "Antigravity"],
+    "security_review": ["Gemini", "Claude Code", "Codex", "DeepSeek V4-Pro", "Antigravity"],
+    "quality_review": ["Claude Code", "Codex", "Gemini", "DeepSeek V4-Pro", "Antigravity"],
+    "delivery": ["Codex", "DeepSeek V4-Pro", "Claude Code", "Gemini", "Antigravity"],
+    "customer_triage": ["Gemini", "DeepSeek V4-Pro", "Claude Code", "Codex"],
+    "contract_review": ["Claude Code", "DeepSeek V4-Pro", "Codex", "Gemini"],
+    "bookkeeping": ["DeepSeek V4-Pro", "Codex", "Gemini", "Claude Code"],
+    "finance_report": ["DeepSeek V4-Pro", "Claude Code", "Codex", "Gemini"],
+    "marketing_content": ["DeepSeek V4-Pro", "Claude Code", "Gemini", "Codex"],
+    "social_monitor": ["Gemini", "DeepSeek V4-Pro", "Claude Code", "Codex"],
 }
-DEFAULT_BACKGROUND_FALLBACK_TOOLS = ["Codex", "Claude Code", "Gemini", "Antigravity"]
+DEFAULT_BACKGROUND_FALLBACK_TOOLS = ["DeepSeek V4-Pro", "Codex", "Claude Code", "Gemini", "Antigravity"]
 
 
 def dedupe_tools(tools: list[str]) -> list[str]:
@@ -308,14 +360,22 @@ def get_tools_status_cached() -> dict[str, Any]:
         "Claude Code": True,
         "Codex": True,
         "Gemini": True,
+        "DeepSeek V4-Pro": True,
     }
     data: dict[str, Any] = {}
     acp_scripts = get_acp_scripts()
     registry = get_acp_agent_registry()
     for tool, acp_entry in registry.items():
         command = resolve_tool_command(tool)
-        acp_enabled = bool(acp_scripts["agent"]["exists"] and acp_scripts["agent"]["executable"] and acp_entry.get("target"))
-        available = command is not None or acp_enabled
+        deepseek_api_enabled = tool == "DeepSeek V4-Pro" and bool(os.getenv("CEO_CONSOLE_DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY"))
+        acp_requires_config = tool == "DeepSeek V4-Pro"
+        acp_enabled = bool(
+            acp_scripts["agent"]["exists"]
+            and acp_scripts["agent"]["executable"]
+            and acp_entry.get("target")
+            and (not acp_requires_config or acp_entry.get("configured"))
+        )
+        available = command is not None or acp_enabled or deepseek_api_enabled
         runnable = False
         reason = None
         if available and command and headless_support.get(tool, True):
@@ -323,6 +383,9 @@ def get_tools_status_cached() -> dict[str, Any]:
         elif available and acp_enabled and headless_support.get(tool, True):
             runnable = True
             reason = "通过 ACP 动态接入，按通用 Agent 目标调度。"
+        elif available and deepseek_api_enabled:
+            runnable = True
+            reason = "通过 DeepSeek API 接入，适合低成本批量摘要、草稿和结构化任务。"
         elif available and not headless_support.get(tool, True):
             runnable = False
             reason = "该工具当前仅支持交互模式，不支持后台无头自动执行。"
@@ -648,7 +711,7 @@ def token_optimized_pipeline(
         "token_policy": [
             "先摘要、后执行：大上下文任务先由 Codex 提炼范围和验收点。",
             "先局部、后全栈：单文件/小范围改动不启动 Antigravity。",
-            "工具擅长点优先：架构交给 Claude，广域调研/安全交给 Gemini，局部执行交给 Codex，全栈集成交给 Antigravity。",
+            "工具擅长点优先：架构/高风险交给 Claude，广域/多模态交给 Gemini，局部执行交给 Codex，低成本草稿/结构化交给 DeepSeek，全栈集成交给 Antigravity/OpenClaw，跨 Agent 管家交给 Hermes。",
             "项目性质优先：根据前端/后端/移动/边缘/部署/文档画像调整链路。",
             "先机器、后人工：Cursor 作为人工精修入口，不做后台调度。",
             "只传必要上下文：优先传 diff、锁定文件、执行清单和 ADR 摘要。",
@@ -669,6 +732,10 @@ def pipeline_role(tool: str, index: int, primary_tool: str) -> str:
         return "广域调研/安全扫描"
     if tool == "Antigravity":
         return "端到端集成"
+    if tool == "DeepSeek V4-Pro":
+        return "低成本草稿/结构化"
+    if tool == "Hermes":
+        return "多模型路由/管家"
     return "执行/验证"
 
 

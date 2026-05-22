@@ -217,6 +217,7 @@ def build_operations_report() -> dict[str, Any]:
             for r in conn.execute("SELECT * FROM decision_logs ORDER BY created_at DESC LIMIT 20").fetchall()
         ]
     governance_avg = round(sum(p.get("governance_score", 0) for p in projects) / len(projects)) if projects else 0
+    business_os = build_company_operating_system()
     return {
         "generated_at": now_str(),
         "projects": {
@@ -239,12 +240,133 @@ def build_operations_report() -> dict[str, Any]:
             "items": repos,
         },
         "decisions": decisions,
+        "business_os": business_os,
     }
 
 
 @app.route("/api/reports/operations")
 def api_reports_operations():
     return jsonify(build_operations_report())
+
+
+def business_task_status(task: dict[str, Any]) -> str:
+    if task.get("execution_state") == "succeeded" and task.get("review_result") == "approved":
+        return "已完成"
+    if task.get("execution_state") == "succeeded" and task.get("status") == "AI执行中":
+        return "待人工审查"
+    if task.get("execution_state") in {"failed", "unsupported"} and task.get("status") == "AI执行中":
+        return "待分配"
+    return task.get("status") or "待分配"
+
+
+def business_task_ref(task: dict[str, Any]) -> dict[str, Any]:
+    error = task.get("execution_error") or ""
+    return {
+        "id": task.get("id"),
+        "title": task.get("title"),
+        "project": task.get("project"),
+        "task_type": task.get("task_type"),
+        "status": business_task_status(task),
+        "raw_status": task.get("status"),
+        "execution_state": task.get("execution_state"),
+        "assignee_ai": task.get("assignee_ai"),
+        "priority": task.get("priority"),
+        "due_at": task.get("due_at"),
+        "updated_at": task.get("updated_at"),
+        "execution_error": error[:240] if error else None,
+    }
+
+
+def build_business_decision_queue(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    queue: list[dict[str, Any]] = []
+    for task in tasks:
+        status = business_task_status(task)
+        state = task.get("execution_state")
+        due_at = parse_datetime_value(task.get("due_at"))
+        overdue = bool(due_at and due_at < datetime.now() and status not in {"已完成"})
+        if status == "待人工审查":
+            queue.append({"level": "P0", "task": business_task_ref(task), "reason": "等待 CEO 验收", "action": "approve_or_reject"})
+        elif state in {"failed", "unsupported"}:
+            reason = (task.get("execution_error") or "自动调度失败")[:240]
+            queue.append({"level": "P0", "task": business_task_ref(task), "reason": reason, "action": "retry_or_rewrite"})
+        elif overdue:
+            queue.append({"level": "P1", "task": business_task_ref(task), "reason": "任务已超期", "action": "reprioritize"})
+    priority_rank = {"P0": 0, "P1": 1, "P2": 2}
+    queue.sort(key=lambda item: (priority_rank.get(item["level"], 9), item["task"].get("updated_at") or ""), reverse=False)
+    return queue[:8]
+
+
+def build_company_operating_system() -> dict[str, Any]:
+    init_db()
+    with closing(db_conn()) as conn:
+        reconcile_task_statuses(conn)
+        conn.commit()
+        tasks = [row_to_task(r) for r in fetch_tasks(conn)]
+        counts = get_task_counts(conn)
+
+    modules = []
+    for key, spec in BUSINESS_MODULES.items():
+        module_types = set(spec["task_types"])
+        module_tasks = [task for task in tasks if task.get("task_type") in module_types]
+        active = [task for task in module_tasks if business_task_status(task) not in {"已完成"}]
+        review = [task for task in module_tasks if business_task_status(task) == "待人工审查"]
+        failed = [task for task in module_tasks if task.get("execution_state") in {"failed", "unsupported"}]
+        latest = sorted(module_tasks, key=lambda task: task.get("updated_at") or "", reverse=True)[:1]
+        route_plan = token_optimized_pipeline(spec["default_task_type"], apply_availability=True)
+        route_steps = route_plan.get("execution_pipeline") or route_plan.get("pipeline") or []
+        modules.append(
+            {
+                "key": key,
+                "name": spec["name"],
+                "tagline": spec["tagline"],
+                "task_types": spec["task_types"],
+                "toolchain": spec["toolchain"],
+                "ceo_actions": spec["ceo_actions"],
+                "default_task_type": spec["default_task_type"],
+                "task_template": spec["task_template"],
+                "stats": {
+                    "total": len(module_tasks),
+                    "active": len(active),
+                    "review": len(review),
+                    "failed": len(failed),
+                },
+                "route": {
+                    "primary_tool": route_plan.get("primary_tool"),
+                    "recommended_tool": route_plan.get("recommended_tool"),
+                    "reason": route_plan.get("reason"),
+                    "execution_chain": [step.get("tool") for step in route_steps],
+                    "fallback_applied": route_plan.get("fallback_applied"),
+                    "skipped_tools": route_plan.get("skipped_tools") or [],
+                },
+                "latest_task": business_task_ref(latest[0]) if latest else None,
+            }
+        )
+
+    decision_queue = build_business_decision_queue(tasks)
+    return {
+        "generated_at": now_str(),
+        "principle": "CEO 只做三件事：看经营态势、说目标指令、点批准或驳回。",
+        "layers": [
+            {"name": "Web CEO 驾驶舱", "role": "统一呈现日报、任务、风险和待决策队列"},
+            {"name": "任务路由器", "role": "把自然语言目标拆成任务类型、上下文范围和低 Token 链路"},
+            {"name": "Agent 编排器", "role": "通过 ACP 调度 Cursor / Antigravity / OpenClaw / Hermes / Claude / Codex / Gemini / DeepSeek"},
+            {"name": "上下文总线", "role": "注入项目文档、决策日志、客户/财务/营销资料摘要"},
+            {"name": "人机协作网关", "role": "低风险自动推进，高风险交给 CEO 审批"},
+        ],
+        "interaction_modes": [
+            {"name": "看", "description": "查看 AI 巡航摘要、风险、待评审与报表"},
+            {"name": "说", "description": "用自然语言创建经营任务或补充审批意见"},
+            {"name": "点", "description": "批准、驳回、重试、发布、合并或确认入账"},
+        ],
+        "counts": counts,
+        "modules": modules,
+        "decision_queue": decision_queue,
+    }
+
+
+@app.route("/api/company-operating-system")
+def api_company_operating_system():
+    return jsonify(build_company_operating_system())
 
 
 @app.route("/api/tools/status")
@@ -881,7 +1003,7 @@ def api_health():
     pm_exists = PM_SCRIPT.exists()
 
     tools = {}
-    for tool in ["Cursor", "Antigravity", "Claude Code", "Codex", "Gemini"]:
+    for tool in CORE_AI_TOOLS:
         cmd = resolve_tool_command(tool)
         tools[tool] = {"available": cmd is not None, "command": cmd}
 

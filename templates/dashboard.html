@@ -45,10 +45,11 @@
     .right-stack { min-width:0; display:grid; gap:var(--gap); align-content:start; }
     .left > .kpis { order:1; }
     .left > .governance-row { order:2; }
-    .left > #taskCenterSection { order:3; }
-    .left > #detail { order:4; }
-    .left > #analytics { order:5; }
-    .left > .midrow { order:6; }
+    .left > #businessOS { order:3; }
+    .left > #taskCenterSection { order:4; }
+    .left > #detail { order:5; }
+    .left > #analytics { order:6; }
+    .left > .midrow { order:7; }
     .kpis { display:grid; grid-template-columns:repeat(7,minmax(148px,1fr)); gap:var(--gap); overflow-x:auto; padding-bottom:2px; }
     .kpi { min-height:68px; background:#fff; border:1px solid var(--line); border-radius:7px; padding:var(--pad-sm) 12px; display:grid; grid-template-columns:minmax(0,1fr) 24px; gap:6px 8px; box-shadow:var(--shadow); align-items:start; }
     .kpi-label { color:#64748b; font-size:12px; line-height:1.2; }
@@ -161,6 +162,26 @@
     .tools-summary-item { border:1px solid var(--line2); border-radius:7px; background:#fff; padding:var(--pad-sm); display:grid; gap:4px; min-height:58px; }
     .tools-summary-item b { font-size:18px; line-height:1; }
     .tools-summary-item span { color:#64748b; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .business-os { overflow:visible; }
+    .business-os-top { padding:var(--pad); border-bottom:1px solid var(--line); background:#fbfdff; display:grid; grid-template-columns:1.2fr .8fr; gap:var(--inner-gap); align-items:stretch; }
+    .business-principle { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:grid; gap:8px; }
+    .business-principle b { font-size:16px; }
+    .business-mode-row { display:flex; gap:6px; flex-wrap:wrap; }
+    .business-decision { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:grid; gap:8px; min-width:0; }
+    .business-decision h4 { margin:0; font-size:13px; }
+    .business-queue { display:grid; gap:6px; max-height:128px; overflow:auto; }
+    .business-queue-item { border:1px solid var(--line2); border-radius:6px; padding:7px; display:grid; gap:4px; cursor:pointer; background:#fbfdff; font-size:12px; }
+    .business-os-grid { padding:var(--pad); display:grid; grid-template-columns:repeat(4,minmax(180px,1fr)); gap:var(--inner-gap); }
+    .business-card { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:grid; gap:9px; min-width:0; }
+    .business-card h4 { margin:0; font-size:14px; }
+    .business-card p { margin:0; color:#64748b; font-size:12px; line-height:1.45; }
+    .business-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+    .business-stat { border:1px solid var(--line2); border-radius:6px; padding:7px; background:#fbfdff; display:grid; gap:2px; }
+    .business-stat b { font-size:16px; line-height:1; }
+    .business-stat span { color:#64748b; font-size:11px; }
+    .business-chain { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+    .business-actions { display:flex; gap:6px; flex-wrap:wrap; }
+    .business-actions button { height:28px; padding:0 9px; border:1px solid #bfdbfe; border-radius:4px; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:800; }
     #toolsSection { position:relative; overflow:visible; }
     .tools-details { border-top:0; position:relative; }
     .tools-details summary { list-style:none; cursor:pointer; padding:11px 16px; display:flex; align-items:center; justify-content:space-between; color:#334155; font-weight:900; font-size:13px; border-bottom:1px solid var(--line); background:#fff; }
@@ -322,8 +343,8 @@
     .toast { position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(12px); opacity:0; pointer-events:none; transition:.18s; background:#111827; color:#fff; padding:10px 14px; border-radius:6px; z-index:100; font-size:12px; }
     .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
     @media (max-width:1280px) { .workspace { grid-template-columns:1fr; } .detail { position:static; min-height:auto; } .midrow { grid-template-columns:1fr; } }
-    @media (max-width:960px) { .governance-row { grid-template-columns:1fr; } }
-    @media (max-width:860px) { :root { --side-w:64px; } .brand-text,.nav-text,.sidebar-foot .ver { display:none; } .nav-item { justify-content:center; padding:0; } .badge { position:absolute; right:2px; top:4px; } .risk-grid,.board,.decision-form,.project-tools,.metric-strip,.settings-form,.analytics-cards,.detail-body,.detail-footer { grid-template-columns:1fr; } .detail-body { grid-template-areas:"title" "tags" "summary" "progress" "route" "failure" "log" "config"; } .detail-title,#detailTags,.detail-body > .field,.detail-log-block,.detail-body > .detail-config { grid-column:1; } .top-meta { display:none; } .title { font-size:15px; } }
+    @media (max-width:960px) { .governance-row,.business-os-top { grid-template-columns:1fr; } .business-os-grid { grid-template-columns:repeat(2,minmax(180px,1fr)); } }
+    @media (max-width:860px) { :root { --side-w:64px; } .brand-text,.nav-text,.sidebar-foot .ver { display:none; } .nav-item { justify-content:center; padding:0; } .badge { position:absolute; right:2px; top:4px; } .risk-grid,.board,.decision-form,.project-tools,.metric-strip,.settings-form,.analytics-cards,.detail-body,.detail-footer,.business-os-grid { grid-template-columns:1fr; } .detail-body { grid-template-areas:"title" "tags" "summary" "progress" "route" "failure" "log" "config"; } .detail-title,#detailTags,.detail-body > .field,.detail-log-block,.detail-body > .detail-config { grid-column:1; } .top-meta { display:none; } .title { font-size:15px; } }
   </style>
 </head>
 <body>
@@ -338,6 +359,7 @@
       </div>
       <nav class="nav">
         <a class="nav-item active" href="#workbench"><span class="nav-ico">⌂</span><span class="nav-text">工作台</span></a>
+        <a class="nav-item" href="#businessOS"><span class="nav-ico">◎</span><span class="nav-text">经营驾驶舱</span></a>
         <a class="nav-item" href="#projects"><span class="nav-ico">▦</span><span class="nav-text">项目总览</span></a>
         <a class="nav-item" href="#taskCenterSection"><span class="nav-ico">☷</span><span class="nav-text">任务中心</span><span class="badge" id="navTaskBadge">0</span></a>
         <a class="nav-item" href="#detail"><span class="nav-ico">☑</span><span class="nav-text">评审中心</span><span class="badge" id="navReviewBadge">0</span></a>
@@ -402,6 +424,22 @@
                 </section>
             </section>
 
+            <section class="panel business-os" id="businessOS">
+              <div class="panel-head"><span class="panel-title">一人公司经营驾驶舱</span><span class="pill blue-tag">CEO 只做：看 / 说 / 点</span><button class="panel-link" onclick="createBusinessTask('project')">创建项目巡航 ›</button></div>
+              <div class="business-os-top">
+                <div class="business-principle">
+                  <b id="businessPrinciple">CEO 只做关键节点决策</b>
+                  <div class="business-mode-row" id="businessModes"></div>
+                  <p style="margin:0;color:#64748b;font-size:12px;line-height:1.55">底层通过 ACP 编排 Cursor、Antigravity、OpenClaw、Hermes、Claude、Codex、Gemini 与 DeepSeek V4-Pro，低风险自动推进，高风险进入人工审批。</p>
+                </div>
+                <div class="business-decision">
+                  <h4>CEO 待决策队列</h4>
+                  <div class="business-queue" id="businessDecisionQueue"></div>
+                </div>
+              </div>
+              <div class="business-os-grid" id="businessOsRows"></div>
+            </section>
+
             <section class="midrow">
               <div class="midcol">
                 <div class="panel quick-panel">
@@ -409,9 +447,9 @@
                   <div class="quick">
                     <div class="field"><label>任务名称</label><input id="newTitle" class="input" placeholder="输入任务名称（必填）" /></div>
                     <div class="field"><label>所属项目</label><select id="newProject" class="select"></select></div>
-                    <div class="field"><label>任务类型</label><select id="newTaskType" class="select"><option value="fullstack">全栈研发</option><option value="market_research">市场调研</option><option value="architecture">架构设计</option><option value="code_edit">代码修改</option><option value="testing">测试验证</option><option value="docs">文档交付</option><option value="security_review">安全审查</option><option value="quality_review">质量审查</option><option value="delivery">交付打包</option></select></div>
+                    <div class="field"><label>任务类型</label><select id="newTaskType" class="select"><option value="fullstack">全栈研发</option><option value="market_research">市场调研</option><option value="architecture">架构设计</option><option value="code_edit">代码修改</option><option value="testing">测试验证</option><option value="docs">文档交付</option><option value="security_review">安全审查</option><option value="quality_review">质量审查</option><option value="delivery">交付打包</option><option value="customer_triage">客户分诊</option><option value="contract_review">合同审查</option><option value="bookkeeping">财务记账</option><option value="finance_report">财务问诊</option><option value="marketing_content">内容车间</option><option value="social_monitor">社媒监听</option></select></div>
                     <div class="field"><label>优先级</label><div class="priority-row"><button onclick="setNewPriority('P2')" id="newP2">低</button><button onclick="setNewPriority('P1')" id="newP1" class="active">中</button><button onclick="setNewPriority('P0')" id="newP0">高</button></div></div>
-                    <div class="field"><label>指派给</label><select id="newAI" class="select"><option>Antigravity</option><option>Claude Code</option><option>Codex</option><option>Gemini</option><option>Cursor</option><option>Other</option></select></div>
+                    <div class="field"><label>指派给</label><select id="newAI" class="select"><option>Antigravity</option><option>Claude Code</option><option>Codex</option><option>Gemini</option><option>DeepSeek V4-Pro</option><option>Cursor</option><option>Other</option></select></div>
                     <label class="checkline"><input id="newAutoRoute" type="checkbox" checked /> 智能路由工具</label>
                     <label class="checkline"><input id="autoDispatch" type="checkbox" /> 创建后立即执行（AI 调度）</label>
                     <input id="newDueAt" class="input" placeholder="截止：2026-05-20 18:00:00" />
@@ -542,8 +580,8 @@
               <div class="settings-form">
                 <div class="field"><label>调度超时（秒）</label><input id="settingDispatchTimeout" class="input" type="number" min="60" max="7200" step="60" /></div>
                 <div class="field"><label>看板刷新（秒）</label><input id="settingRefreshSeconds" class="input" type="number" min="5" max="300" step="5" /></div>
-                <div class="field"><label>默认任务类型</label><select id="settingDefaultTaskType" class="select"><option value="fullstack">全栈研发</option><option value="market_research">市场调研</option><option value="architecture">架构设计</option><option value="code_edit">代码修改</option><option value="testing">测试验证</option><option value="docs">文档交付</option><option value="security_review">安全审查</option><option value="quality_review">质量审查</option><option value="delivery">交付打包</option></select></div>
-                <div class="field"><label>默认执行 AI</label><select id="settingDefaultAI" class="select"><option>Other</option><option>Antigravity</option><option>Claude Code</option><option>Codex</option><option>Gemini</option><option>Cursor</option></select></div>
+                <div class="field"><label>默认任务类型</label><select id="settingDefaultTaskType" class="select"><option value="fullstack">全栈研发</option><option value="market_research">市场调研</option><option value="architecture">架构设计</option><option value="code_edit">代码修改</option><option value="testing">测试验证</option><option value="docs">文档交付</option><option value="security_review">安全审查</option><option value="quality_review">质量审查</option><option value="delivery">交付打包</option><option value="customer_triage">客户分诊</option><option value="contract_review">合同审查</option><option value="bookkeeping">财务记账</option><option value="finance_report">财务问诊</option><option value="marketing_content">内容车间</option><option value="social_monitor">社媒监听</option></select></div>
+                <div class="field"><label>默认执行 AI</label><select id="settingDefaultAI" class="select"><option>Other</option><option>Antigravity</option><option>Claude Code</option><option>Codex</option><option>Gemini</option><option>DeepSeek V4-Pro</option><option>Cursor</option></select></div>
                 <label class="checkline"><input id="settingAutoRoute" type="checkbox" /> 新任务默认智能路由</label>
                 <div class="button-row"><button class="secondary" onclick="resetSettings()">恢复默认</button><button class="secondary" onclick="applySettingsToQuickCreate()">应用到快速创建</button></div>
               </div>
@@ -614,10 +652,11 @@
     let operationsReport = {};
     let acpStatus = {};
     let tokenRouting = {};
+    let businessOS = {};
     let onlyDirtyRepos = false;
     let appSettings = {};
     let routingRules = {};
-    let allowedAssigneeAI = ["Antigravity","Claude Code","Codex","Gemini","Cursor","Other"];
+    let allowedAssigneeAI = ["Antigravity","Claude Code","Codex","Gemini","DeepSeek V4-Pro","Cursor","Other"];
     let settingsDiagnosticsOpen = false;
     const boardCollapsedDefaults = {"待分配":false,"AI执行中":false,"待人工审查":true,"已完成":true};
     const boardCollapsedStorageKey = "ceoConsole.boardCollapsed.v1";
@@ -630,7 +669,7 @@
     let refreshTimer = null;
     let liveDetailTimer = null;
     const statusMap = {"待分配":["colTodo","countTodo","colWrapTodo","toggleTodo","summaryTodo"],"AI执行中":["colRunning","countRunning","colWrapRunning","toggleRunning","summaryRunning"],"待人工审查":["colReview","countReview","colWrapReview","toggleReview","summaryReview"],"已完成":["colDone","countDone","colWrapDone","toggleDone","summaryDone"]};
-    const taskTypeLabel = {market_research:"市场调研", architecture:"架构设计", fullstack:"全栈研发", code_edit:"代码修改", testing:"测试验证", docs:"文档交付", security_review:"安全审查", quality_review:"质量审查", delivery:"交付打包"};
+    const taskTypeLabel = {market_research:"市场调研", architecture:"架构设计", fullstack:"全栈研发", code_edit:"代码修改", testing:"测试验证", docs:"文档交付", security_review:"安全审查", quality_review:"质量审查", delivery:"交付打包", customer_triage:"客户分诊", contract_review:"合同审查", bookkeeping:"财务记账", finance_report:"财务问诊", marketing_content:"内容车间", social_monitor:"社媒监听"};
 
     function qs(id){ return document.getElementById(id); }
     function esc(v){ return String(v ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;"); }
@@ -836,8 +875,8 @@
       return `<div class="quota-cell"><div class="quota-top"><span>${esc(quota.label || "待同步")}</span>${reset}</div><div class="quota-bar ${cls}"><span style="width:${percent}%"></span></div>${recharge}</div>`;
     }
 
-    const coreToolOrder = ["Cursor","Antigravity","Claude Code","Codex","Gemini"];
-    const toolLabels = {"Claude Code":"本地 LLM","Codex":"代码生成助手","Gemini":"向量检索 / 研究","Antigravity":"任务调度服务","Cursor":"人工精修入口","Other":"本地运行环境"};
+    const coreToolOrder = ["Cursor","Antigravity","Claude Code","Codex","Gemini","DeepSeek V4-Pro"];
+    const toolLabels = {"Claude Code":"本地 LLM","Codex":"代码生成助手","Gemini":"向量检索 / 研究","Antigravity":"任务调度服务","DeepSeek V4-Pro":"低成本主力模型","Hermes":"智能体管家","Cursor":"人工精修入口","Other":"本地运行环境"};
     function orderedToolNames(includeOther=false){
       const acpTools = Object.keys((acpStatus || {}).tools || {});
       const detected = [...coreToolOrder, ...Object.keys(toolsStatus || {}), ...acpTools].filter(Boolean);
@@ -863,13 +902,13 @@
       const apiNames = orderedToolNames(false);
       const detected = apiNames.map(name => toolsStatus[name] || {});
       const runnable = detected.filter(info => info.available && info.runnable).length;
-      const available = detected.filter(info => info.available !== false).length;
+      const available = detected.filter(info => info.available === true).length;
       qs("toolsRunnableCount").textContent = `${runnable}/${detected.length}`;
       qs("toolsRunnableHint").textContent = `${available} 个工具可见，${runnable} 个可后台调度`;
       const rowNames = [...apiNames, "Other"];
       qs("toolRows").innerHTML = rowNames.map((toolName,i) => {
         const info = toolsStatus[toolName] || {};
-        const ok = info.available !== false;
+        const ok = toolName === "Other" ? true : info.available === true;
         const acp = info.acp_enabled ? `<span class="pill blue-tag">ACP</span>` : "";
         const dyn = info.dynamic_acp ? `<span class="pill p-green">新 Agent</span>` : "";
         const label = toolLabels[toolName] || "ACP Agent";
@@ -919,6 +958,54 @@
     function renderCommandCenter(){
       const rows = commandCenter.next_actions || [];
       qs("opsRows").innerHTML = rows.map(r => `<tr><td><span class="pill ${r.level === "P0" ? "p-red" : r.level === "P1" ? "p-orange" : "p-green"}">${esc(r.level)}</span></td><td>${esc(r.title)}</td><td>${esc(r.action)}</td></tr>`).join("") || `<tr><td colspan="3">暂无运营动作</td></tr>`;
+    }
+    function renderBusinessOS(){
+      const modes = businessOS.interaction_modes || [];
+      qs("businessPrinciple").textContent = businessOS.principle || "CEO 只做关键节点决策";
+      qs("businessModes").innerHTML = modes.map(mode => `<span class="pill blue-tag">${esc(mode.name)} · ${esc(mode.description)}</span>`).join("") || `<span class="pill blue-tag">看 / 说 / 点</span>`;
+      const queue = businessOS.decision_queue || [];
+      qs("businessDecisionQueue").innerHTML = queue.map(item => {
+        const task = item.task || {};
+        const levelCls = item.level === "P0" ? "p-red" : item.level === "P1" ? "p-orange" : "p-green";
+        return `<div class="business-queue-item" onclick="selectTask(${Number(task.id) || 0})"><div><span class="pill ${levelCls}">${esc(item.level)}</span> <b>${esc(task.title || "待决策事项")}</b></div><span>${esc(item.reason || "-")}</span><span class="project-path">${esc(task.project || "-")} · ${esc(item.action || "decision")}</span></div>`;
+      }).join("") || `<div class="brief-empty">暂无待决策事项</div>`;
+      const modules = businessOS.modules || [];
+      qs("businessOsRows").innerHTML = modules.map(module => {
+        const stats = module.stats || {};
+        const route = module.route || {};
+        const chain = (route.execution_chain || module.toolchain || []).filter(Boolean).slice(0,5);
+        const skipped = (route.skipped_tools || []).length ? `<span class="pill p-orange">跳过 ${route.skipped_tools.length}</span>` : "";
+        const latest = module.latest_task ? `<p>最新：${esc(module.latest_task.title)} · ${esc(taskTypeLabel[module.latest_task.task_type] || module.latest_task.task_type)}</p>` : `<p>等待创建首个巡航任务</p>`;
+        return `<article class="business-card">
+          <div><h4>${esc(module.name)}</h4><p>${esc(module.tagline)}</p></div>
+          <div class="business-stats"><div class="business-stat"><b>${stats.active || 0}</b><span>推进中</span></div><div class="business-stat"><b>${stats.review || 0}</b><span>待决策</span></div><div class="business-stat"><b>${stats.failed || 0}</b><span>异常</span></div></div>
+          <div class="business-chain">${chain.map(tool => `<span class="pill blue-tag">${esc(tool)}</span>`).join("<span>→</span>")}${skipped}</div>
+          ${latest}
+          <div class="business-actions"><button onclick="createBusinessTask('${esc(module.key)}')">创建巡航任务</button><button onclick="showBusinessRoute('${esc(module.key)}')">查看路由</button></div>
+        </article>`;
+      }).join("") || `<div class="brief-empty">经营模块等待加载</div>`;
+    }
+    function showBusinessRoute(moduleKey){
+      const module = (businessOS.modules || []).find(item => item.key === moduleKey);
+      if (!module) { toast("未找到经营模块"); return; }
+      const route = module.route || {};
+      setDetailLog(`${module.name} 调度链路\n推荐主节点：${route.recommended_tool || "-"}\n当前主节点：${route.primary_tool || "-"}\n链路：${(route.execution_chain || []).join(" -> ") || "-"}\n原因：${route.reason || "-"}\n跳过节点：${(route.skipped_tools || []).map(item => `${item.tool}: ${item.reason}`).join("\\n") || "无"}`);
+      openLogFloat();
+    }
+    function createBusinessTask(moduleKey){
+      const module = (businessOS.modules || []).find(item => item.key === moduleKey);
+      const tpl = (module || {}).task_template || {};
+      if (!projects.length) { toast("请先创建项目，再创建巡航任务"); return; }
+      qs("newTitle").value = tpl.title || "经营巡航任务";
+      qs("newProject").value = selectedProjectName || projects[0].name;
+      qs("newTaskType").value = (module || {}).default_task_type || "fullstack";
+      qs("newAIInstruction").value = tpl.instruction || "";
+      qs("newExpectedOutput").value = tpl.expected_output || "";
+      qs("newLockedScope").value = "";
+      qs("newAutoRoute").checked = true;
+      setNewPriority(tpl.priority || "P1");
+      focusCreate();
+      toast(`已填入${(module || {}).name || "经营"}巡航任务`);
     }
     function renderDecisions(){
       qs("decisionRows").innerHTML = (decisions || []).slice(0,8).map(d => `<tr><td>${esc(d.created_at)}</td><td>${esc(d.project)}</td><td>${esc(d.decision)}</td></tr>`).join("") || `<tr><td colspan="3">暂无决策日志</td></tr>`;
@@ -1204,11 +1291,11 @@
       try {
         const q = qs("taskSearch")?.value || "";
         const order = qs("taskSort")?.value || "updated_at";
-        const [proj, summary, tools, health, taskRows, brief, ops, decisionRows, settingsResp, repoResp, reportResp, acpResp, tokenResp] = await Promise.all([
+        const [proj, summary, tools, health, taskRows, brief, ops, decisionRows, settingsResp, repoResp, reportResp, acpResp, tokenResp, businessResp] = await Promise.all([
           fetchJSON("/api/projects"), fetchJSON("/api/dashboard-summary"), fetchJSON("/api/tools/status"), fetchJSON("/api/health"),
           fetchJSON(`/api/tasks?${new URLSearchParams({ q, order_by: order }).toString()}`), fetchJSON("/api/daily-brief"),
           fetchJSON("/api/operations/command-center"), fetchJSON("/api/decision-logs?limit=8"), fetchJSON("/api/settings"), fetchJSON("/api/repositories"),
-          fetchJSON("/api/reports/operations"), fetchJSON("/api/acp/summary"), fetchJSON("/api/acp/token-routing")
+          fetchJSON("/api/reports/operations"), fetchJSON("/api/acp/summary"), fetchJSON("/api/acp/token-routing"), fetchJSON("/api/company-operating-system")
         ]);
         projects = proj.projects || [];
         archivedProjects = proj.archived_projects || [];
@@ -1226,12 +1313,14 @@
         operationsReport = reportResp || {};
         acpStatus = acpResp || {};
         tokenRouting = tokenResp || {};
+        businessOS = businessResp || {};
         if (selectedTaskId && !tasks.some(t => t.id === selectedTaskId)) selectedTaskId = null;
         renderKpis(summary || {});
         renderRisks();
         renderProjects();
         renderTools();
         renderCommandCenter();
+        renderBusinessOS();
         renderDecisions();
         renderReports();
         renderSettings();
@@ -1368,6 +1457,7 @@
           failed: tasks.filter(t => ["failed","unsupported"].includes(t.execution_state)).length,
         },
         command_center: commandCenter,
+        business_os: businessOS,
         recent_decisions: decisions,
         health: healthStatus,
         tools: toolsStatus,

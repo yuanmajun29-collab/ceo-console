@@ -52,6 +52,7 @@ def test_api_surface_smoke_matrix(client, monkeypatch: pytest.MonkeyPatch):
         "/api/tasks",
         "/api/tasks/export",
         "/api/tool-routing-rules",
+        "/api/company-operating-system",
         "/api/dashboard-summary",
         "/api/daily-brief",
         "/api/decision-logs",
@@ -374,6 +375,32 @@ def test_token_optimized_routing_endpoint_and_task_reason(client):
     assert "Codex" in task["routing_reason"]
 
 
+def test_company_operating_system_maps_business_modules(client):
+    _create_task(client, title="客户巡航", task_type="customer_triage", assignee_ai="Other", auto_route=True)
+    _create_task(client, title="营销初稿", task_type="marketing_content", assignee_ai="Other", auto_route=True)
+    _create_task(client, title="财务问诊", task_type="finance_report", assignee_ai="Other", auto_route=True)
+
+    body = client.get("/api/company-operating-system").get_json()
+    assert "看经营态势" in body["principle"]
+    modules = {module["key"]: module for module in body["modules"]}
+    assert set(modules) == {"project", "customer", "finance", "marketing"}
+    assert modules["customer"]["stats"]["total"] == 1
+    assert modules["marketing"]["route"]["recommended_tool"] == "DeepSeek V4-Pro"
+    assert "DeepSeek V4-Pro" in modules["finance"]["toolchain"]
+    assert any(layer["name"] == "人机协作网关" for layer in body["layers"])
+
+
+def test_deepseek_routing_and_settings_are_exposed(client):
+    settings = client.get("/api/settings").get_json()
+    assert "DeepSeek V4-Pro" in settings["allowed"]["assignee_ai"]
+    assert "marketing_content" in settings["allowed"]["task_types"]
+
+    route = client.get("/api/acp/token-routing?task_type=marketing_content&title=生成一组营销文案").get_json()
+    assert route["current"]["recommended_tool"] == "DeepSeek V4-Pro"
+    assert "DeepSeek V4-Pro" in [step["tool"] for step in route["current"]["pipeline"]]
+    assert route["tool_profiles"]["DeepSeek V4-Pro"]["cost"] == 1
+
+
 def test_availability_aware_route_skips_unavailable_primary(client, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(
         server,
@@ -495,6 +522,8 @@ def test_frontend_contract_contains_all_core_modules():
         "settingsSummary",
         "settingsDiagnostics",
         "settingsRows",
+        "businessOsRows",
+        "businessDecisionQueue",
         "analyticsBars",
         "repoOps",
         "repoRows",
@@ -533,6 +562,8 @@ def test_frontend_contract_contains_all_core_modules():
         "repoAction",
         "loadAcpStatus",
         "renderAnalytics",
+        "renderBusinessOS",
+        "createBusinessTask",
         "quotaHtml",
         "effectiveTaskStatus",
         "taskFailureReason",
