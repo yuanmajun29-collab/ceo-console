@@ -18,3 +18,8 @@ venv/
 *.log
 *.sqlite
 *.db
+
+# Agent coordinator generated context
+.agent-coordinator/context-inject.txt
+.claude/coordinator-context.txt
+CLAUDE.md
