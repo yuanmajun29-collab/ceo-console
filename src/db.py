@@ -73,6 +73,41 @@ def init_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS finance_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                occurred_on TEXT NOT NULL,
+                amount_cents INTEGER NOT NULL,
+                currency TEXT NOT NULL DEFAULT 'CNY',
+                direction TEXT NOT NULL,
+                category TEXT,
+                vendor TEXT,
+                note TEXT,
+                project TEXT,
+                source TEXT NOT NULL DEFAULT 'manual',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS finance_subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                vendor TEXT,
+                amount_cents INTEGER NOT NULL,
+                currency TEXT NOT NULL DEFAULT 'CNY',
+                cycle TEXT NOT NULL DEFAULT 'monthly',
+                next_renewal_on TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
+                note TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
         conn.commit()
 
 

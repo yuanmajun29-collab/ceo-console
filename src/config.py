@@ -33,6 +33,11 @@ DEFAULT_PORT = 5050
 DEFAULT_DISPATCH_TIMEOUT_SECONDS = 1800
 ACP_DISCOVERY_REFRESH_SECONDS = int(os.getenv("CEO_CONSOLE_ACP_DISCOVERY_REFRESH_SECONDS", "5"))
 
+FINANCE_DIRECTIONS = {"in", "out"}
+FINANCE_CYCLES = {"monthly", "quarterly", "yearly", "once"}
+FINANCE_SUBSCRIPTION_STATUSES = {"active", "paused", "cancelled"}
+FINANCE_CYCLE_MONTHS = {"monthly": 1, "quarterly": 3, "yearly": 12, "once": 0}
+
 ALLOWED_STATUS = {"待分配", "AI执行中", "待人工审查", "已完成"}
 ALLOWED_PRIORITY = {"P0", "P1", "P2"}
 ALLOWED_AI = {"Antigravity", "Claude Code", "Cursor", "Codex", "Gemini", "DeepSeek V4-Pro", "Other"}
@@ -155,9 +160,28 @@ TASK_TYPE_PIPELINE = {
     "social_monitor": ["Gemini", "Claude Code", "DeepSeek V4-Pro"],
 }
 
+BUSINESS_DOMAINS = {
+    "operations": {
+        "name": "生产与经营",
+        "tagline": "公司的交付能力——把目标变成可验收的产物",
+        "modules": ["project"],
+    },
+    "sales": {
+        "name": "营销与销售",
+        "tagline": "公司的获客与成单能力——从触达、转化到续费",
+        "modules": ["marketing", "customer"],
+    },
+    "finance": {
+        "name": "财务运作",
+        "tagline": "公司的财务全景——现金跑道、收入支出、订阅与税务",
+        "modules": ["finance"],
+    },
+}
+
 BUSINESS_MODULES = {
     "project": {
         "name": "项目交付",
+        "domain": "operations",
         "tagline": "从需求、设计、开发、测试到交付的自动巡航",
         "task_types": ["market_research", "architecture", "fullstack", "code_edit", "testing", "docs", "security_review", "quality_review", "delivery"],
         "toolchain": ["Antigravity", "OpenClaw", "Codex", "Claude Code", "Gemini"],
@@ -171,35 +195,23 @@ BUSINESS_MODULES = {
         },
     },
     "customer": {
-        "name": "客户管理",
-        "tagline": "自动识别客户情绪、商机、投诉与合同风险",
+        "name": "客户与销售",
+        "domain": "sales",
+        "tagline": "客户分诊、合同审查、销售管道与续费提醒",
         "task_types": ["customer_triage", "contract_review"],
         "toolchain": ["Hermes", "Gemini", "DeepSeek V4-Pro", "Claude Code"],
-        "ceo_actions": ["批准回复", "要求重写", "接受合同风险"],
+        "ceo_actions": ["批准回复", "推进商机", "接受合同风险", "确认续费"],
         "default_task_type": "customer_triage",
         "task_template": {
-            "title": "今日客户情绪与待办巡航",
+            "title": "今日客户与销售管道巡航",
             "priority": "P0",
-            "instruction": "汇总今日客户沟通记录，识别退款、询价、投诉、Bug 反馈和合同风险；为低风险事项生成回复草稿，高风险事项进入 CEO 待决策队列。",
-            "expected_output": "客户情绪日报、风险客户清单、建议回复草稿、CEO 决策项",
-        },
-    },
-    "finance": {
-        "name": "财务问诊",
-        "tagline": "票据归档、流水分类、现金流预测与异常支出预警",
-        "task_types": ["bookkeeping", "finance_report"],
-        "toolchain": ["Gemini", "DeepSeek V4-Pro", "Claude Code", "Codex"],
-        "ceo_actions": ["确认入账", "批准预算", "暂停订阅"],
-        "default_task_type": "finance_report",
-        "task_template": {
-            "title": "现金流与票据巡航",
-            "priority": "P1",
-            "instruction": "检查本期票据、流水、订阅支出和现金流趋势；普通归档走 DeepSeek 低成本结构化，高风险现金流结论交 Claude Code 复核。",
-            "expected_output": "财务健康摘要、异常支出清单、现金流预测、需要 CEO 确认的入账项",
+            "instruction": "汇总今日客户沟通、新询价、未签合同、续费到期与投诉风险；对低风险事项生成回复草稿，高风险事项进入 CEO 待决策队列。",
+            "expected_output": "客户情绪日报、销售管道状态、续费提醒、合同风险清单、建议回复草稿",
         },
     },
     "marketing": {
         "name": "营销推广",
+        "domain": "sales",
         "tagline": "内容车间、SEO 主题、社媒监听与回复建议",
         "task_types": ["marketing_content", "social_monitor", "market_research"],
         "toolchain": ["Gemini", "DeepSeek V4-Pro", "Claude Code", "Hermes"],
@@ -210,6 +222,21 @@ BUSINESS_MODULES = {
             "priority": "P1",
             "instruction": "围绕当前产品和项目进展生成内容主题、文章初稿、短文案与社媒互动建议；DeepSeek 批量出初稿，Claude 做最终润色，发布前等待 CEO 批准。",
             "expected_output": "内容选题、营销文案初稿、社媒机会清单、发布前审批项",
+        },
+    },
+    "finance": {
+        "name": "财务运作",
+        "domain": "finance",
+        "tagline": "公司整体现金流、收入支出、订阅与税务，不绑定单一项目",
+        "task_types": ["bookkeeping", "finance_report"],
+        "toolchain": ["Gemini", "DeepSeek V4-Pro", "Claude Code", "Codex"],
+        "ceo_actions": ["确认入账", "批准预算", "暂停订阅", "审批支出"],
+        "default_task_type": "finance_report",
+        "task_template": {
+            "title": "公司财务健康巡航",
+            "priority": "P1",
+            "instruction": "汇总本期收入、支出、订阅净额与现金跑道；普通归档走 DeepSeek 低成本结构化，高风险结论交 Claude Code 复核；输出公司级（非单项目）的财务健康摘要。",
+            "expected_output": "公司财务健康摘要、异常支出清单、现金跑道预测、订阅净额、需 CEO 确认的入账项",
         },
     },
 }

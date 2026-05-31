@@ -163,25 +163,32 @@
     .tools-summary-item b { font-size:18px; line-height:1; }
     .tools-summary-item span { color:#64748b; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .business-os { overflow:visible; }
-    .business-os-top { padding:var(--pad); border-bottom:1px solid var(--line); background:#fbfdff; display:grid; grid-template-columns:1.2fr .8fr; gap:var(--inner-gap); align-items:stretch; }
-    .business-principle { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:grid; gap:8px; }
-    .business-principle b { font-size:16px; }
-    .business-mode-row { display:flex; gap:6px; flex-wrap:wrap; }
+    .business-os-top { padding:var(--pad); border-bottom:1px solid var(--line); background:#fbfdff; display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,.85fr); gap:var(--inner-gap); align-items:stretch; }
+    .business-principle { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:54px; min-width:0; }
+    .business-principle b { font-size:15px; white-space:nowrap; }
+    .business-mode-row { display:flex; gap:6px; flex-wrap:nowrap; overflow:hidden; }
+    .business-mode-row .pill { white-space:nowrap; }
     .business-decision { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:grid; gap:8px; min-width:0; }
-    .business-decision h4 { margin:0; font-size:13px; }
-    .business-queue { display:grid; gap:6px; max-height:128px; overflow:auto; }
-    .business-queue-item { border:1px solid var(--line2); border-radius:6px; padding:7px; display:grid; gap:4px; cursor:pointer; background:#fbfdff; font-size:12px; }
+    .business-decision h4 { margin:0; font-size:13px; line-height:1; }
+    .business-queue { display:grid; gap:5px; max-height:92px; overflow:auto; }
+    .business-queue-item { border:1px solid var(--line2); border-radius:6px; padding:6px 8px; display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:7px; cursor:pointer; background:#fbfdff; font-size:12px; }
+    .business-queue-item b { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .business-queue-item .project-path { max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .business-queue-more { color:#64748b; font-size:12px; text-align:right; }
     .business-os-grid { padding:var(--pad); display:grid; grid-template-columns:repeat(4,minmax(180px,1fr)); gap:var(--inner-gap); }
-    .business-card { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:grid; gap:9px; min-width:0; }
+    .business-card { border:1px solid var(--line2); border-radius:8px; background:#fff; padding:var(--pad-sm); display:grid; gap:8px; min-width:0; }
+    .business-card-head { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
     .business-card h4 { margin:0; font-size:14px; }
-    .business-card p { margin:0; color:#64748b; font-size:12px; line-height:1.45; }
+    .business-card-head h4 { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .business-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
-    .business-stat { border:1px solid var(--line2); border-radius:6px; padding:7px; background:#fbfdff; display:grid; gap:2px; }
+    .business-stat { border:1px solid var(--line2); border-radius:6px; padding:6px; background:#fbfdff; display:grid; gap:2px; }
     .business-stat b { font-size:16px; line-height:1; }
     .business-stat span { color:#64748b; font-size:11px; }
-    .business-chain { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+    .business-chain { display:flex; flex-wrap:nowrap; gap:5px; align-items:center; min-width:0; overflow:hidden; }
+    .business-chain .pill { white-space:nowrap; }
+    .business-latest { color:#64748b; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .business-actions { display:flex; gap:6px; flex-wrap:wrap; }
-    .business-actions button { height:28px; padding:0 9px; border:1px solid #bfdbfe; border-radius:4px; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:800; }
+    .business-actions button { height:26px; padding:0 8px; border:1px solid #bfdbfe; border-radius:4px; background:#eff6ff; color:#1d4ed8; font-size:12px; font-weight:800; }
     #toolsSection { position:relative; overflow:visible; }
     .tools-details { border-top:0; position:relative; }
     .tools-details summary { list-style:none; cursor:pointer; padding:11px 16px; display:flex; align-items:center; justify-content:space-between; color:#334155; font-weight:900; font-size:13px; border-bottom:1px solid var(--line); background:#fff; }
@@ -425,12 +432,11 @@
             </section>
 
             <section class="panel business-os" id="businessOS">
-              <div class="panel-head"><span class="panel-title">一人公司经营驾驶舱</span><span class="pill blue-tag">CEO 只做：看 / 说 / 点</span><button class="panel-link" onclick="createBusinessTask('project')">创建项目巡航 ›</button></div>
+              <div class="panel-head"><span class="panel-title">一人公司经营驾驶舱</span><span class="pill blue-tag">CEO 只做：看 / 说 / 点</span><button class="panel-link" onclick="runBusinessPatrol('project')">项目巡航 ›</button></div>
               <div class="business-os-top">
                 <div class="business-principle">
-                  <b id="businessPrinciple">CEO 只做关键节点决策</b>
+                  <b id="businessPrinciple">关键节点决策</b>
                   <div class="business-mode-row" id="businessModes"></div>
-                  <p style="margin:0;color:#64748b;font-size:12px;line-height:1.55">底层通过 ACP 编排 Cursor、Antigravity、OpenClaw、Hermes、Claude、Codex、Gemini 与 DeepSeek V4-Pro，低风险自动推进，高风险进入人工审批。</p>
                 </div>
                 <div class="business-decision">
                   <h4>CEO 待决策队列</h4>
@@ -764,14 +770,14 @@
         }, 0);
       });
     }
-    function openLogFloat(event){
+    function openLogFloat(event, label){
       if (event) event.stopPropagation();
       const mask = qs("logFloatMask");
       const content = qs("logFloatContent");
       const task = currentTask();
       if (!mask || !content) return;
       content.textContent = latestDetailLogContent || qs("detailLog")?.textContent || "暂无日志";
-      qs("logFloatTask").textContent = task ? (task.title || "当前任务") : "当前任务";
+      qs("logFloatTask").textContent = label || (task ? (task.title || "当前任务") : "当前任务");
       mask.classList.add("show");
       requestAnimationFrame(() => { content.scrollTop = content.scrollHeight; });
     }
@@ -961,27 +967,33 @@
     }
     function renderBusinessOS(){
       const modes = businessOS.interaction_modes || [];
-      qs("businessPrinciple").textContent = businessOS.principle || "CEO 只做关键节点决策";
-      qs("businessModes").innerHTML = modes.map(mode => `<span class="pill blue-tag">${esc(mode.name)} · ${esc(mode.description)}</span>`).join("") || `<span class="pill blue-tag">看 / 说 / 点</span>`;
+      qs("businessPrinciple").textContent = "关键节点决策";
+      qs("businessPrinciple").title = businessOS.principle || "";
+      qs("businessModes").innerHTML = modes.map(mode => `<span class="pill blue-tag" title="${esc(mode.description)}">${esc(mode.name)}</span>`).join("") || `<span class="pill blue-tag">看</span><span class="pill blue-tag">说</span><span class="pill blue-tag">点</span>`;
       const queue = businessOS.decision_queue || [];
-      qs("businessDecisionQueue").innerHTML = queue.map(item => {
+      const queuePreview = queue.slice(0,3).map(item => {
         const task = item.task || {};
         const levelCls = item.level === "P0" ? "p-red" : item.level === "P1" ? "p-orange" : "p-green";
-        return `<div class="business-queue-item" onclick="selectTask(${Number(task.id) || 0})"><div><span class="pill ${levelCls}">${esc(item.level)}</span> <b>${esc(task.title || "待决策事项")}</b></div><span>${esc(item.reason || "-")}</span><span class="project-path">${esc(task.project || "-")} · ${esc(item.action || "decision")}</span></div>`;
-      }).join("") || `<div class="brief-empty">暂无待决策事项</div>`;
+        return `<div class="business-queue-item" title="${esc(item.reason || "")}" onclick="selectTask(${Number(task.id) || 0})"><span class="pill ${levelCls}">${esc(item.level)}</span><b>${esc(task.title || "待决策事项")}</b><span class="project-path">${esc(task.project || item.action || "-")}</span></div>`;
+      }).join("");
+      const queueMore = queue.length > 3 ? `<div class="business-queue-more">+${queue.length - 3} 项待决策</div>` : "";
+      qs("businessDecisionQueue").innerHTML = queuePreview ? `${queuePreview}${queueMore}` : `<div class="brief-empty">暂无待决策事项</div>`;
       const modules = businessOS.modules || [];
       qs("businessOsRows").innerHTML = modules.map(module => {
         const stats = module.stats || {};
         const route = module.route || {};
-        const chain = (route.execution_chain || module.toolchain || []).filter(Boolean).slice(0,5);
+        const fullChain = (route.execution_chain || module.toolchain || []).filter(Boolean);
+        const chain = fullChain.slice(0,3);
+        const chainMore = fullChain.length > chain.length ? `<span class="pill">+${fullChain.length - chain.length}</span>` : "";
+        const primary = route.primary_tool || route.recommended_tool || chain[0] || "-";
         const skipped = (route.skipped_tools || []).length ? `<span class="pill p-orange">跳过 ${route.skipped_tools.length}</span>` : "";
-        const latest = module.latest_task ? `<p>最新：${esc(module.latest_task.title)} · ${esc(taskTypeLabel[module.latest_task.task_type] || module.latest_task.task_type)}</p>` : `<p>等待创建首个巡航任务</p>`;
+        const latest = module.latest_task ? `最新：${module.latest_task.title || "未命名任务"}` : "待创建首个巡航";
         return `<article class="business-card">
-          <div><h4>${esc(module.name)}</h4><p>${esc(module.tagline)}</p></div>
+          <div class="business-card-head"><h4 title="${esc(module.tagline || module.name)}">${esc(module.name)}</h4><span class="pill blue-tag" title="当前主节点">${esc(primary)}</span></div>
           <div class="business-stats"><div class="business-stat"><b>${stats.active || 0}</b><span>推进中</span></div><div class="business-stat"><b>${stats.review || 0}</b><span>待决策</span></div><div class="business-stat"><b>${stats.failed || 0}</b><span>异常</span></div></div>
-          <div class="business-chain">${chain.map(tool => `<span class="pill blue-tag">${esc(tool)}</span>`).join("<span>→</span>")}${skipped}</div>
-          ${latest}
-          <div class="business-actions"><button onclick="createBusinessTask('${esc(module.key)}')">创建巡航任务</button><button onclick="showBusinessRoute('${esc(module.key)}')">查看路由</button></div>
+          <div class="business-chain" title="${esc(fullChain.join(" -> ") || "-")}">${chain.map(tool => `<span class="pill blue-tag">${esc(tool)}</span>`).join("<span>→</span>")}${chainMore}${skipped}</div>
+          <div class="business-latest" title="${esc(latest)}">${esc(latest)}</div>
+          <div class="business-actions"><button onclick="runBusinessPatrol('${esc(module.key)}')">巡航</button><button onclick="showBusinessRoute('${esc(module.key)}')">详情</button></div>
         </article>`;
       }).join("") || `<div class="brief-empty">经营模块等待加载</div>`;
     }
@@ -989,23 +1001,61 @@
       const module = (businessOS.modules || []).find(item => item.key === moduleKey);
       if (!module) { toast("未找到经营模块"); return; }
       const route = module.route || {};
-      setDetailLog(`${module.name} 调度链路\n推荐主节点：${route.recommended_tool || "-"}\n当前主节点：${route.primary_tool || "-"}\n链路：${(route.execution_chain || []).join(" -> ") || "-"}\n原因：${route.reason || "-"}\n跳过节点：${(route.skipped_tools || []).map(item => `${item.tool}: ${item.reason}`).join("\\n") || "无"}`);
-      openLogFloat();
+      const tpl = module.task_template || {};
+      setDetailLog(`${module.name} 经营模块\n定位：${module.tagline || "-"}\nCEO 动作：${(module.ceo_actions || []).join(" / ") || "-"}\n默认任务：${tpl.title || "-"}\n推荐主节点：${route.recommended_tool || "-"}\n当前主节点：${route.primary_tool || "-"}\n链路：${(route.execution_chain || []).join(" -> ") || "-"}\n原因：${route.reason || "-"}\n跳过节点：${(route.skipped_tools || []).map(item => `${item.tool}: ${item.reason}`).join("\\n") || "无"}`);
+      openLogFloat(null, module.name || "经营模块");
+    }
+    function businessTaskPayload(module){
+      const tpl = (module || {}).task_template || {};
+      return {
+        title: tpl.title || `${(module || {}).name || "经营"}巡航任务`,
+        project: selectedProjectName || projects[0]?.name || "",
+        assignee_ai: "Other",
+        priority: tpl.priority || "P1",
+        status: "待分配",
+        due_at: "",
+        task_type: (module || {}).default_task_type || "fullstack",
+        ai_instruction: tpl.instruction || "",
+        locked_scope: "",
+        expected_output: tpl.expected_output || "",
+        auto_route: true
+      };
     }
     function createBusinessTask(moduleKey){
       const module = (businessOS.modules || []).find(item => item.key === moduleKey);
-      const tpl = (module || {}).task_template || {};
       if (!projects.length) { toast("请先创建项目，再创建巡航任务"); return; }
-      qs("newTitle").value = tpl.title || "经营巡航任务";
-      qs("newProject").value = selectedProjectName || projects[0].name;
-      qs("newTaskType").value = (module || {}).default_task_type || "fullstack";
-      qs("newAIInstruction").value = tpl.instruction || "";
-      qs("newExpectedOutput").value = tpl.expected_output || "";
-      qs("newLockedScope").value = "";
-      qs("newAutoRoute").checked = true;
-      setNewPriority(tpl.priority || "P1");
+      const payload = businessTaskPayload(module);
+      qs("newTitle").value = payload.title;
+      qs("newProject").value = payload.project;
+      qs("newTaskType").value = payload.task_type;
+      qs("newAIInstruction").value = payload.ai_instruction;
+      qs("newExpectedOutput").value = payload.expected_output;
+      qs("newLockedScope").value = payload.locked_scope;
+      qs("newAutoRoute").checked = payload.auto_route;
+      setNewPriority(payload.priority);
       focusCreate();
       toast(`已填入${(module || {}).name || "经营"}巡航任务`);
+    }
+    async function runBusinessPatrol(moduleKey){
+      const module = (businessOS.modules || []).find(item => item.key === moduleKey);
+      if (!module) { toast("未找到经营模块"); return; }
+      if (!projects.length) { toast("请先创建项目，再启动巡航"); return; }
+      const latestId = Number(module.latest_task?.id || 0);
+      const latest = latestId ? (tasks.find(t => Number(t.id) === latestId) || module.latest_task) : null;
+      if (latest && effectiveTaskStatus(latest) !== "已完成") {
+        selectedTaskId = latest.id;
+        renderBoard();
+        renderDetail();
+        document.querySelector(".detail")?.scrollIntoView({behavior:"smooth", block:"start"});
+        toast(`已打开${module.name}巡航任务：${effectiveTaskStatus(latest)}`);
+        return;
+      }
+      const created = await fetchJSON("/api/tasks", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(businessTaskPayload(module)) });
+      selectedTaskId = created.id;
+      toast(`已创建${module.name}巡航任务`);
+      await loadAll();
+      document.querySelector(".detail")?.scrollIntoView({behavior:"smooth", block:"start"});
+      if (qs("autoDispatch")?.checked) await dispatchTask();
     }
     function renderDecisions(){
       qs("decisionRows").innerHTML = (decisions || []).slice(0,8).map(d => `<tr><td>${esc(d.created_at)}</td><td>${esc(d.project)}</td><td>${esc(d.decision)}</td></tr>`).join("") || `<tr><td colspan="3">暂无决策日志</td></tr>`;

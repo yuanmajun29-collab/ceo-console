@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import subprocess
+from contextlib import closing
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -49,9 +51,18 @@ def _update_task_raw(task_id: int, sql: str, args: tuple):
 
 
 def test_dashboard_route_and_no_cache_header(client):
+    # `/` either renders the legacy dashboard (no SPA built) or redirects to /app/
     page = client.get("/")
-    assert page.status_code == 200
-    assert "项目工作台" in page.get_data(as_text=True)
+    assert page.status_code in (200, 302)
+    if page.status_code == 200:
+        assert "项目工作台" in page.get_data(as_text=True)
+    else:
+        assert page.headers["Location"].rstrip("/") == "/app"
+
+    # `/legacy` always serves the legacy dashboard so existing flows keep working.
+    legacy = client.get("/legacy")
+    assert legacy.status_code == 200
+    assert "项目工作台" in legacy.get_data(as_text=True)
 
     health = client.get("/api/health")
     assert health.status_code == 200
@@ -680,6 +691,226 @@ def test_task_type_auto_route_and_routing_rules(client):
     reroute = client.post(f"/api/tasks/{task['id']}/route")
     assert reroute.status_code == 200
     assert reroute.get_json()["tool"] == "Claude Code"
+
+
+def test_bulk_dispatch_queues_workers_and_reports_skipped(client, monkeypatch: pytest.MonkeyPatch):
+    started: list[int] = []
+
+    class _FakeThread:
+        def __init__(self, target, args=(), daemon=False):
+            self._target = target
+            self._args = args
+
+        def start(self):
+            started.append(self._args[0])
+
+    monkeypatch.setattr(server.threading, "Thread", _FakeThread)
+
+    ok = _create_task(client, title="批量任务1", project="proj-a").get_json()
+    running = _create_task(client, title="正在跑", project="proj-a").get_json()
+    _update_task_raw(running["id"], "UPDATE tasks SET execution_state = ? WHERE id = ?", ("running",))
+
+    resp = client.post(
+        "/api/tasks/bulk-dispatch",
+        json={"ids": [ok["id"], running["id"], 999_999, ok["id"]]},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["ok"] is True
+    assert body["queued_count"] == 1
+    assert body["queued_ids"] == [ok["id"]]
+    skipped_reasons = {s["id"]: s["reason"] for s in body["skipped"]}
+    assert "task is already running" in skipped_reasons[running["id"]]
+    assert "task not found" in skipped_reasons[999_999]
+    # 重复 ID 在 _parse_bulk_ids 中去重，不应出现在 skipped
+    assert ok["id"] not in skipped_reasons
+    assert started == [ok["id"]]
+
+
+def test_bulk_dispatch_rejects_bad_input(client):
+    assert client.post("/api/tasks/bulk-dispatch", json={"ids": []}).status_code == 400
+    assert client.post("/api/tasks/bulk-dispatch", json={"ids": ["abc"]}).status_code == 400
+    assert client.post("/api/tasks/bulk-dispatch", json={}).status_code == 400
+    too_many = client.post(
+        "/api/tasks/bulk-dispatch", json={"ids": list(range(1, server.BULK_DISPATCH_MAX + 2))}
+    )
+    assert too_many.status_code == 400
+    assert "max" in too_many.get_json()["error"].lower()
+
+
+def test_bulk_retry_resets_state_and_reroutes(client, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(server.threading, "Thread", type(
+        "T", (), {"__init__": lambda self, target, args=(), daemon=False: None, "start": lambda self: None}
+    ))
+    monkeypatch.setattr(
+        server,
+        "token_optimized_pipeline",
+        lambda *a, **kw: {
+            "primary_tool": "Codex",
+            "recommended_tool": "Codex",
+            "reason": "测试路由",
+            "pipeline": [{"tool": "Codex"}],
+            "execution_pipeline": [{"tool": "Codex"}],
+            "skipped_tools": [],
+            "fallback_applied": False,
+        },
+    )
+
+    failed = _create_task(client, title="失败任务", project="proj-a").get_json()
+    _update_task_raw(
+        failed["id"],
+        "UPDATE tasks SET execution_state = ?, execution_error = ?, status = ? WHERE id = ?",
+        ("failed", "old error", "AI执行中"),
+    )
+
+    resp = client.post("/api/tasks/bulk-retry", json={"ids": [failed["id"]]})
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["queued_count"] == 1
+    assert body["queued"][0]["tool"] == "Codex"
+
+    refreshed = client.get(f"/api/tasks/{failed['id']}").get_json()
+    assert refreshed["status"] == "待分配"
+    assert refreshed["execution_state"] == "idle"
+    assert refreshed["execution_error"] is None
+    assert refreshed["assignee_ai"] == "Codex"
+
+
+def test_bulk_review_approves_and_rejects(client):
+    a = _create_task(client, title="任务A", project="proj-a").get_json()
+    b = _create_task(client, title="任务B", project="proj-a").get_json()
+    c = _create_task(client, title="任务C", project="proj-a").get_json()
+    for task in (a, b):
+        _update_task_raw(task["id"], "UPDATE tasks SET status = ? WHERE id = ?", ("待人工审查",))
+
+    # 通过两个待审查 + 一个不在待审查的（应被跳过）
+    resp = client.post(
+        "/api/tasks/bulk-review",
+        json={"ids": [a["id"], b["id"], c["id"]], "decision": "approve", "comment": "批量验收"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["applied_count"] == 2
+    assert set(body["applied_ids"]) == {a["id"], b["id"]}
+    assert any(s["id"] == c["id"] for s in body["skipped"])
+
+    refreshed_a = client.get(f"/api/tasks/{a['id']}").get_json()
+    assert refreshed_a["status"] == "已完成"
+    assert refreshed_a["review_result"] == "approved"
+    assert refreshed_a["review_comment"] == "批量验收"
+
+    # 驳回路径
+    d = _create_task(client, title="任务D", project="proj-a").get_json()
+    _update_task_raw(d["id"], "UPDATE tasks SET status = ? WHERE id = ?", ("待人工审查",))
+    reject = client.post(
+        "/api/tasks/bulk-review",
+        json={"ids": [d["id"]], "decision": "reject", "comment": "需要补充验收"},
+    )
+    assert reject.status_code == 200
+    assert reject.get_json()["applied_count"] == 1
+    refreshed_d = client.get(f"/api/tasks/{d['id']}").get_json()
+    assert refreshed_d["status"] == "待分配"
+    assert refreshed_d["review_result"] == "rejected"
+
+
+def _drain_sse(client, path: str, max_events: int = 20) -> list[dict]:
+    """Collect SSE events from a streaming response until it closes."""
+    resp = client.get(path, buffered=False)
+    events: list[dict] = []
+    current_event: str | None = None
+    buffer = ""
+    try:
+        for chunk in resp.response:
+            buffer += chunk.decode("utf-8", errors="replace")
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line = line.rstrip("\r")
+                if not line:
+                    current_event = None
+                    continue
+                if line.startswith(":"):
+                    continue
+                if line.startswith("event:"):
+                    current_event = line.split(":", 1)[1].strip()
+                    continue
+                if line.startswith("data:"):
+                    payload = line[5:].strip()
+                    try:
+                        data = json.loads(payload) if payload else {}
+                    except json.JSONDecodeError:
+                        data = {"raw": payload}
+                    events.append({"event": current_event or "message", "data": data})
+                    if len(events) >= max_events:
+                        return events
+    finally:
+        resp.close()
+    return events
+
+
+def test_log_stream_returns_404_for_missing_task(client):
+    resp = client.get("/api/tasks/999999/log-stream")
+    assert resp.status_code == 404
+
+
+def test_log_stream_emits_init_and_done_when_task_finishes(
+    client, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    # Make polling instant so the test completes quickly.
+    monkeypatch.setattr(server.time, "sleep", lambda *_: None)
+
+    # Build a task that is currently running.
+    task = _create_task(client, title="日志流任务", project="proj-a").get_json()
+    _update_task_raw(
+        task["id"],
+        "UPDATE tasks SET execution_state = ?, status = ? WHERE id = ?",
+        ("running", "AI执行中"),
+    )
+
+    # Drop a fake log file into the data dir (already monkeypatched to tmp_path)
+    log_dir = server.DATA_DIR / "run-logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"task-{task['id']}-20260524-120000.log"
+    log_file.write_text("initial log line\n", encoding="utf-8")
+
+    # Flip task state to succeeded on the first poll, so the stream terminates.
+    call_state = {"count": 0}
+    original_conn = server.db_conn
+
+    def stateful_conn():
+        conn = original_conn()
+        if call_state["count"] == 0:
+            call_state["count"] += 1
+        elif call_state["count"] == 1:
+            # second invocation comes from the state check inside the loop —
+            # mark task as succeeded so the stream closes.
+            with closing(original_conn()) as c2:
+                c2.execute(
+                    "UPDATE tasks SET execution_state = 'succeeded' WHERE id = ?",
+                    (task["id"],),
+                )
+                c2.commit()
+            call_state["count"] += 1
+        return conn
+
+    monkeypatch.setattr(server, "db_conn", stateful_conn)
+
+    events = _drain_sse(client, f"/api/tasks/{task['id']}/log-stream", max_events=8)
+    event_names = [e["event"] for e in events]
+    assert "init" in event_names
+    init = next(e for e in events if e["event"] == "init")
+    assert "initial log line" in init["data"]["content"]
+    assert "done" in event_names
+    done = next(e for e in events if e["event"] == "done")
+    assert done["data"]["state"] == "succeeded"
+
+
+def test_bulk_review_rejects_invalid_decision(client):
+    bad = client.post(
+        "/api/tasks/bulk-review",
+        json={"ids": [1], "decision": "maybe"},
+    )
+    assert bad.status_code == 400
+    assert "decision" in bad.get_json()["error"]
 
 
 def test_decision_logs_and_command_center(client):

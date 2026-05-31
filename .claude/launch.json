@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ceo-console",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-c", "import time; time.sleep(99999)"],
+      "port": 5050
+    }
+  ]
+}

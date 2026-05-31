@@ -19,6 +19,7 @@ from . import projects as _projects
 from . import tools as _tools
 from . import dispatch as _dispatch
 from . import tasks as _tasks
+from . import finance as _finance
 from . import routes as _routes
 
 from .core import app, add_no_cache_headers
@@ -29,9 +30,10 @@ from .dispatch import *
 from .tasks import *
 from .tools import *
 from .tools import _TOOL_STATUS_CACHE
+from .finance import *
 from .routes import *
 
-_PROXY_MODULES = [_config, _db, _projects, _tools, _dispatch, _tasks, _routes]
+_PROXY_MODULES = [_config, _db, _projects, _tools, _dispatch, _tasks, _finance, _routes]
 
 
 def main() -> None:

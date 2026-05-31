@@ -13,10 +13,26 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from flask import jsonify, render_template, request
+from flask import jsonify, render_template, request, send_from_directory
 from flask import Response
 
 from .core import app
+from .config import APP_DIR
+from . import finance as _finance_mod
+from .finance import (
+    OCR_SUPPORTED_MIME_TYPES,
+    compute_overview as finance_compute_overview,
+    delete_subscription as finance_delete_subscription,
+    delete_transaction as finance_delete_transaction,
+    import_transactions_from_csv as finance_import_csv,
+    insert_subscription as finance_insert_subscription,
+    insert_transaction as finance_insert_transaction,
+    is_ocr_configured as finance_is_ocr_configured,
+    list_subscriptions as finance_list_subscriptions,
+    list_transactions as finance_list_transactions,
+    ocr_receipt as finance_ocr_receipt,
+    patch_subscription as finance_patch_subscription,
+)
 from .config import *
 from .db import db_conn, init_db
 from .dispatch import append_task_progress, dispatch_task_worker, launchd_service_status
@@ -96,9 +112,49 @@ def refresh_acp_discovery_from_status(force: bool = False, timeout: int = 8) -> 
         return result
 
 
+SPA_DIST_DIR = APP_DIR / "static" / "app"
+
+
 @app.route("/")
-def dashboard() -> str:
+def root_redirect():
+    # New SPA is mounted at /app/. If it has been built, redirect there; otherwise
+    # fall back to the legacy single-page dashboard so existing tests keep passing.
+    if (SPA_DIST_DIR / "index.html").exists():
+        return Response(status=302, headers={"Location": "/app/"})
     return render_template("dashboard.html")
+
+
+@app.route("/legacy")
+def legacy_dashboard() -> str:
+    return render_template("dashboard.html")
+
+
+@app.route("/app/")
+@app.route("/app")
+def spa_index():
+    index_file = SPA_DIST_DIR / "index.html"
+    if not index_file.exists():
+        return Response(
+            "<h1>CEO Console SPA 未构建</h1>"
+            "<p>请在 <code>frontend/</code> 目录运行 <code>npm install && npm run build</code>，"
+            "然后刷新本页。开发模式可运行 <code>npm run dev</code> 并直接访问 "
+            "<a href=\"http://127.0.0.1:5173/app/\">http://127.0.0.1:5173/app/</a>。</p>",
+            status=503,
+            mimetype="text/html; charset=utf-8",
+        )
+    return send_from_directory(SPA_DIST_DIR, "index.html")
+
+
+@app.route("/app/<path:resource>")
+def spa_asset(resource: str):
+    asset_path = SPA_DIST_DIR / resource
+    if asset_path.exists() and asset_path.is_file():
+        return send_from_directory(SPA_DIST_DIR, resource)
+    # client-side routing: any unknown sub-path returns index.html
+    index_file = SPA_DIST_DIR / "index.html"
+    if index_file.exists():
+        return send_from_directory(SPA_DIST_DIR, "index.html")
+    return Response("SPA not built", status=503)
 
 
 @app.route("/api/projects")
@@ -318,6 +374,7 @@ def build_company_operating_system() -> dict[str, Any]:
             {
                 "key": key,
                 "name": spec["name"],
+                "domain": spec.get("domain"),
                 "tagline": spec["tagline"],
                 "task_types": spec["task_types"],
                 "toolchain": spec["toolchain"],
@@ -343,6 +400,29 @@ def build_company_operating_system() -> dict[str, Any]:
         )
 
     decision_queue = build_business_decision_queue(tasks)
+    domain_summaries: list[dict[str, Any]] = []
+    module_index = {m["key"]: m for m in modules}
+    for d_key, d_spec in BUSINESS_DOMAINS.items():
+        d_modules = [module_index[m_key] for m_key in d_spec["modules"] if m_key in module_index]
+        d_stats_total = sum(m["stats"]["total"] for m in d_modules)
+        d_stats_review = sum(m["stats"]["review"] for m in d_modules)
+        d_stats_failed = sum(m["stats"]["failed"] for m in d_modules)
+        d_stats_active = sum(m["stats"]["active"] for m in d_modules)
+        domain_summaries.append(
+            {
+                "key": d_key,
+                "name": d_spec["name"],
+                "tagline": d_spec["tagline"],
+                "module_keys": d_spec["modules"],
+                "stats": {
+                    "total": d_stats_total,
+                    "active": d_stats_active,
+                    "review": d_stats_review,
+                    "failed": d_stats_failed,
+                },
+            }
+        )
+
     return {
         "generated_at": now_str(),
         "principle": "CEO 只做三件事：看经营态势、说目标指令、点批准或驳回。",
@@ -359,6 +439,7 @@ def build_company_operating_system() -> dict[str, Any]:
             {"name": "点", "description": "批准、驳回、重试、发布、合并或确认入账"},
         ],
         "counts": counts,
+        "domains": domain_summaries,
         "modules": modules,
         "decision_queue": decision_queue,
     }
@@ -512,6 +593,116 @@ def api_tasks_export():
         content,
         mimetype="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="tasks.csv"'},
+    )
+
+
+def _read_byte_range(path: Path, start: int, end: int) -> tuple[str, int]:
+    """Read bytes [start, end) from path, return (decoded text, bytes_read)."""
+    if end <= start:
+        return "", 0
+    with path.open("rb") as f:
+        f.seek(start)
+        data = f.read(end - start)
+    return data.decode("utf-8", errors="replace"), len(data)
+
+
+@app.route("/api/tasks/<int:task_id>/log-stream", methods=["GET"])
+def api_task_log_stream(task_id: int):
+    """Server-Sent Events stream of the latest run log for a task.
+
+    Sends an `init` event with the current tail, then `append` events for new
+    bytes as the file grows. Closes with a `done` event when the task leaves
+    the running state, or after a long idle window with no file activity.
+    """
+    init_db()
+    with closing(db_conn()) as conn:
+        row = conn.execute(
+            "SELECT id, execution_state FROM tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+    if row is None:
+        return jsonify({"error": "task not found"}), 404
+
+    poll_interval = 1.0
+    max_idle_ticks = 120  # 2 minutes of no activity before auto-close
+
+    def stream():
+        log_path = latest_task_log_path(task_id)
+        if log_path and log_path.exists():
+            initial = read_file_tail(log_path, max_chars=12000)
+            cursor = log_path.stat().st_size
+            yield (
+                "event: init\ndata: "
+                + json.dumps(
+                    {"content": initial, "log_path": str(log_path)},
+                    ensure_ascii=False,
+                )
+                + "\n\n"
+            )
+        else:
+            cursor = 0
+            yield "event: init\ndata: " + json.dumps({"content": "", "log_path": None}) + "\n\n"
+
+        idle = 0
+        while True:
+            time.sleep(poll_interval)
+
+            # Re-resolve the latest log path each tick. A retry can rotate to
+            # a brand-new file, in which case we reset the cursor.
+            latest = latest_task_log_path(task_id)
+            if latest is None:
+                idle += 1
+                yield ": heartbeat\n\n"
+            else:
+                if log_path != latest:
+                    log_path = latest
+                    cursor = 0
+                    yield "event: rotate\ndata: " + json.dumps(
+                        {"log_path": str(log_path)}, ensure_ascii=False
+                    ) + "\n\n"
+                try:
+                    size = log_path.stat().st_size
+                except OSError:
+                    size = cursor
+                if size > cursor:
+                    chunk, read = _read_byte_range(log_path, cursor, size)
+                    cursor += read
+                    if chunk:
+                        idle = 0
+                        yield "event: append\ndata: " + json.dumps(
+                            {"content": chunk}, ensure_ascii=False
+                        ) + "\n\n"
+                    else:
+                        idle += 1
+                        yield ": heartbeat\n\n"
+                else:
+                    idle += 1
+                    yield ": heartbeat\n\n"
+
+            with closing(db_conn()) as state_conn:
+                state_row = state_conn.execute(
+                    "SELECT execution_state FROM tasks WHERE id = ?", (task_id,)
+                ).fetchone()
+            current_state = state_row["execution_state"] if state_row else None
+            if current_state in {"succeeded", "failed", "unsupported"}:
+                yield "event: done\ndata: " + json.dumps(
+                    {"state": current_state}, ensure_ascii=False
+                ) + "\n\n"
+                return
+
+            if idle >= max_idle_ticks:
+                yield "event: timeout\ndata: " + json.dumps(
+                    {"reason": "no activity"}, ensure_ascii=False
+                ) + "\n\n"
+                return
+
+    return Response(
+        stream(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )
 
 
@@ -837,6 +1028,202 @@ def api_retry_task(task_id: int):
     return jsonify({"ok": True, "task_id": task_id, "message": "retry started"})
 
 
+BULK_DISPATCH_MAX = 50
+
+
+def _parse_bulk_ids(data: dict[str, Any]) -> tuple[list[int] | None, tuple[Response, int] | None]:
+    ids = data.get("ids")
+    if not isinstance(ids, list) or not ids:
+        return None, (jsonify({"error": "ids must be a non-empty array"}), 400)
+    task_ids: list[int] = []
+    seen: set[int] = set()
+    for item in ids:
+        try:
+            tid = int(item)
+        except (TypeError, ValueError):
+            return None, (jsonify({"error": "ids must contain integers"}), 400)
+        if tid in seen:
+            continue
+        seen.add(tid)
+        task_ids.append(tid)
+    if len(task_ids) > BULK_DISPATCH_MAX:
+        return None, (
+            jsonify({"error": f"too many ids (max {BULK_DISPATCH_MAX} per batch)"}),
+            400,
+        )
+    return task_ids, None
+
+
+@app.route("/api/tasks/bulk-dispatch", methods=["POST"])
+def api_bulk_dispatch_tasks():
+    init_db()
+    data = request.get_json(force=True, silent=False) or {}
+    task_ids, err = _parse_bulk_ids(data)
+    if err is not None:
+        return err
+
+    queued: list[int] = []
+    skipped: list[dict[str, Any]] = []
+    with closing(db_conn()) as conn:
+        for tid in task_ids or []:
+            row = conn.execute(
+                "SELECT id, execution_state, status FROM tasks WHERE id = ?", (tid,)
+            ).fetchone()
+            if row is None:
+                skipped.append({"id": tid, "reason": "task not found"})
+                continue
+            if row["execution_state"] == "running":
+                skipped.append({"id": tid, "reason": "task is already running"})
+                continue
+            queued.append(tid)
+
+    for tid in queued:
+        threading.Thread(target=dispatch_task_worker, args=(tid,), daemon=True).start()
+
+    return jsonify(
+        {
+            "ok": True,
+            "queued_count": len(queued),
+            "queued_ids": queued,
+            "skipped": skipped,
+            "message": f"已发起 {len(queued)} 个任务调度",
+        }
+    )
+
+
+@app.route("/api/tasks/bulk-retry", methods=["POST"])
+def api_bulk_retry_tasks():
+    init_db()
+    data = request.get_json(force=True, silent=False) or {}
+    task_ids, err = _parse_bulk_ids(data)
+    if err is not None:
+        return err
+
+    queued: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+    ts = now_str()
+    with closing(db_conn()) as conn:
+        for tid in task_ids or []:
+            row = conn.execute("SELECT * FROM tasks WHERE id = ?", (tid,)).fetchone()
+            if row is None:
+                skipped.append({"id": tid, "reason": "task not found"})
+                continue
+            if row["execution_state"] == "running":
+                skipped.append({"id": tid, "reason": "task is already running"})
+                continue
+            route_plan = token_optimized_pipeline(
+                row["task_type"],
+                row["title"],
+                f"{row['notes'] or ''} {row['ai_instruction'] or ''}",
+                row["locked_scope"] or "",
+                row["acceptance_criteria"] or "",
+                row["project"] or "",
+                apply_availability=True,
+            )
+            routed_tool = route_plan["primary_tool"]
+            routing_reason = format_route_plan_reason(route_plan)
+            conn.execute(
+                """
+                UPDATE tasks
+                SET status = '待分配',
+                    assignee_ai = ?,
+                    routing_reason = ?,
+                    execution_state = 'idle',
+                    execution_tool = NULL,
+                    execution_command = NULL,
+                    execution_output = NULL,
+                    execution_error = NULL,
+                    execution_progress = NULL,
+                    execution_started_at = NULL,
+                    execution_finished_at = NULL,
+                    review_result = NULL,
+                    review_comment = NULL,
+                    reviewed_at = NULL,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (routed_tool, routing_reason, ts, tid),
+            )
+            queued.append({"id": tid, "tool": routed_tool})
+        conn.commit()
+
+    for entry in queued:
+        tid = entry["id"]
+        append_task_progress(tid, f"批量重试：已重置并重新路由到 {entry['tool']}")
+        threading.Thread(target=dispatch_task_worker, args=(tid,), daemon=True).start()
+
+    return jsonify(
+        {
+            "ok": True,
+            "queued_count": len(queued),
+            "queued": queued,
+            "skipped": skipped,
+            "message": f"已重试 {len(queued)} 个失败任务",
+        }
+    )
+
+
+@app.route("/api/tasks/bulk-review", methods=["POST"])
+def api_bulk_review_tasks():
+    init_db()
+    data = request.get_json(force=True, silent=False) or {}
+    task_ids, err = _parse_bulk_ids(data)
+    if err is not None:
+        return err
+    decision = str(data.get("decision", "")).strip().lower()
+    comment = str(data.get("comment", "")).strip() or None
+    if decision not in {"approve", "reject"}:
+        return jsonify({"error": "decision must be approve or reject"}), 400
+
+    applied: list[int] = []
+    skipped: list[dict[str, Any]] = []
+    new_status = "已完成" if decision == "approve" else "待分配"
+    review_result = "approved" if decision == "approve" else "rejected"
+    progress_template = (
+        "批量人工审查通过，任务闭环完成"
+        if decision == "approve"
+        else f"批量人工审查驳回，任务重开。原因：{comment or '未填写'}"
+    )
+    ts = now_str()
+    with closing(db_conn()) as conn:
+        for tid in task_ids or []:
+            row = conn.execute(
+                "SELECT id, status FROM tasks WHERE id = ?", (tid,)
+            ).fetchone()
+            if row is None:
+                skipped.append({"id": tid, "reason": "task not found"})
+                continue
+            if row["status"] != "待人工审查":
+                skipped.append(
+                    {"id": tid, "reason": f"task is in '{row['status']}', not '待人工审查'"}
+                )
+                continue
+            conn.execute(
+                """
+                UPDATE tasks
+                SET status = ?, review_result = ?, review_comment = ?, reviewed_at = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (new_status, review_result, comment, ts, ts, tid),
+            )
+            applied.append(tid)
+        conn.commit()
+
+    for tid in applied:
+        append_task_progress(tid, progress_template)
+
+    return jsonify(
+        {
+            "ok": True,
+            "applied_count": len(applied),
+            "applied_ids": applied,
+            "skipped": skipped,
+            "decision": decision,
+            "message": f"已{('通过' if decision == 'approve' else '驳回')} {len(applied)} 个任务",
+        }
+    )
+
+
 @app.route("/api/dashboard-summary")
 def api_dashboard_summary():
     init_db()
@@ -1073,3 +1460,121 @@ def api_settings_refresh_tools():
     refresh_acp_discovery_from_status(force=True, timeout=15)
     invalidate_tools_status_cache()
     return jsonify({"ok": True, "tools": get_tools_status_cached()})
+
+
+@app.route("/api/finance/overview", methods=["GET"])
+def api_finance_overview():
+    init_db()
+    return jsonify(finance_compute_overview())
+
+
+@app.route("/api/finance/transactions", methods=["GET", "POST"])
+def api_finance_transactions():
+    init_db()
+    if request.method == "GET":
+        filters = {
+            "month": request.args.get("month", ""),
+            "direction": request.args.get("direction", ""),
+            "category": request.args.get("category", ""),
+            "project": request.args.get("project", ""),
+        }
+        return jsonify(finance_list_transactions(filters))
+    data = request.get_json(force=True, silent=False) or {}
+    inserted, err = finance_insert_transaction(data)
+    if err is not None:
+        return jsonify({"error": err}), 400
+    return jsonify(inserted), 201
+
+
+@app.route("/api/finance/transactions/<int:tid>", methods=["DELETE"])
+def api_finance_delete_transaction(tid: int):
+    init_db()
+    if not finance_delete_transaction(tid):
+        return jsonify({"error": "transaction not found"}), 404
+    return jsonify({"ok": True})
+
+
+@app.route("/api/finance/transactions/import-csv", methods=["POST"])
+def api_finance_import_csv():
+    init_db()
+    raw_csv = request.get_data(as_text=True) or ""
+    if not raw_csv.strip():
+        return jsonify({"error": "csv body is empty"}), 400
+    result = finance_import_csv(raw_csv)
+    status = 200 if result.get("imported", 0) > 0 or not result.get("error") else 400
+    return jsonify(result), status
+
+
+@app.route("/api/finance/subscriptions", methods=["GET", "POST"])
+def api_finance_subscriptions():
+    init_db()
+    if request.method == "GET":
+        status = request.args.get("status", "").strip().lower() or None
+        return jsonify(finance_list_subscriptions(status))
+    data = request.get_json(force=True, silent=False) or {}
+    inserted, err = finance_insert_subscription(data)
+    if err is not None:
+        return jsonify({"error": err}), 400
+    return jsonify(inserted), 201
+
+
+@app.route("/api/finance/subscriptions/<int:sid>", methods=["PATCH", "DELETE"])
+def api_finance_modify_subscription(sid: int):
+    init_db()
+    if request.method == "DELETE":
+        if not finance_delete_subscription(sid):
+            return jsonify({"error": "subscription not found"}), 404
+        return jsonify({"ok": True})
+    data = request.get_json(force=True, silent=False) or {}
+    updated, err = finance_patch_subscription(sid, data)
+    if err == "subscription not found":
+        return jsonify({"error": err}), 404
+    if err is not None:
+        return jsonify({"error": err}), 400
+    return jsonify(updated)
+
+
+@app.route("/api/finance/ocr", methods=["POST"])
+def api_finance_ocr():
+    init_db()
+    if not finance_is_ocr_configured():
+        return jsonify(
+            {
+                "error": "Gemini API key not configured",
+                "hint": "set CEO_CONSOLE_GEMINI_API_KEY or GEMINI_API_KEY in env",
+            }
+        ), 503
+    file = request.files.get("file")
+    if file is None or not file.filename:
+        return jsonify({"error": "file is required (multipart/form-data field \"file\")"}), 400
+    content = file.read()
+    if not content:
+        return jsonify({"error": "file is empty"}), 400
+    mime_type = (file.mimetype or "").lower() or "application/octet-stream"
+    if mime_type not in OCR_SUPPORTED_MIME_TYPES:
+        return jsonify(
+            {
+                "error": f"unsupported mime type: {mime_type}",
+                "supported": sorted(OCR_SUPPORTED_MIME_TYPES),
+            }
+        ), 415
+    result, err = finance_ocr_receipt(content, mime_type, file.filename)
+    if err is not None:
+        return jsonify({"error": err}), 502
+    return jsonify(result)
+
+
+@app.route("/api/finance/receipts/<path:name>", methods=["GET"])
+def api_finance_receipt_file(name: str):
+    # Resolve dynamically so tests can override RECEIPTS_DIR via monkeypatch.
+    receipts_dir = _finance_mod.RECEIPTS_DIR
+    safe_name = Path(name).name
+    target = receipts_dir / safe_name
+    if not target.exists() or not target.is_file():
+        return jsonify({"error": "receipt not found"}), 404
+    return send_from_directory(receipts_dir, safe_name)
+
+
+@app.route("/api/finance/ocr/status", methods=["GET"])
+def api_finance_ocr_status():
+    return jsonify({"configured": finance_is_ocr_configured()})
