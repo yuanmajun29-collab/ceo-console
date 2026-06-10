@@ -46,7 +46,7 @@
 ## 启动
 
 ```bash
-cd ~/ceo-console
+cd ~/company/ceo-console
 python3 -m pip install -r requirements.txt
 python3 server.py
 ```
@@ -80,14 +80,14 @@ CEO_CONSOLE_DISPATCH_TIMEOUT_SECONDS=1800
 安装并立即启动：
 
 ```bash
-cd ~/ceo-console
+cd ~/company/ceo-console
 ./scripts/install-launchd.sh
 ```
 
 卸载：
 
 ```bash
-cd ~/ceo-console
+cd ~/company/ceo-console
 ./scripts/uninstall-launchd.sh
 ```
 

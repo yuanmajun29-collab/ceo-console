@@ -3,7 +3,7 @@
 set -euo pipefail
 
 LABEL="com.oneperson.ceo-console"
-APP_DIR="$HOME/ceo-console"
+APP_DIR="$HOME/company/ceo-console"
 PORT="${CEO_CONSOLE_PORT:-5050}"
 
 echo "Service: $LABEL"

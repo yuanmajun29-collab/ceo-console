@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-APP_DIR="$HOME/ceo-console"
+APP_DIR="$HOME/company/ceo-console"
 PLIST_PATH="$HOME/Library/LaunchAgents/com.oneperson.ceo-console.plist"
 PYTHON_BIN="${PYTHON_BIN:-$(command -v python3)}"
 CEO_CONSOLE_PORT="${CEO_CONSOLE_PORT:-5050}"
