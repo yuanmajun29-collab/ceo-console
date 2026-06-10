@@ -18,6 +18,7 @@ from . import db as _db
 from . import projects as _projects
 from . import tools as _tools
 from . import dispatch as _dispatch
+from . import ai_as_me as _ai_as_me
 from . import tasks as _tasks
 from . import finance as _finance
 from . import routes as _routes
@@ -31,9 +32,10 @@ from .tasks import *
 from .tools import *
 from .tools import _TOOL_STATUS_CACHE
 from .finance import *
+from .ai_as_me import *
 from .routes import *
 
-_PROXY_MODULES = [_config, _db, _projects, _tools, _dispatch, _tasks, _finance, _routes]
+_PROXY_MODULES = [_config, _db, _projects, _tools, _dispatch, _ai_as_me, _tasks, _finance, _routes]
 
 
 def main() -> None:
