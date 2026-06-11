@@ -19,16 +19,41 @@ interface HealthData {
   runtime_config: { host: string; port: number; dispatch_timeout_seconds: number };
   settings: Record<string, unknown>;
   tools: Record<string, { available: boolean; command: string | null }>;
+  obsidian: { knowledge_base_path: string; inbox_path: string; hint: string };
+}
+
+interface ToolHealthRow {
+  tool: string;
+  status: "ok" | "degraded" | "unavailable" | "unknown" | string;
+  last_ok_at: string | null;
+  last_check_at: string | null;
+  last_error: string | null;
+  ok_count: number;
+  fail_count: number;
+}
+
+interface ToolHealthData {
+  generated_at: string;
+  count: number;
+  degraded_count: number;
+  tools: ToolHealthRow[];
+  risks: Array<Record<string, unknown>>;
 }
 
 const message = useMessage();
 const data = ref<HealthData | null>(null);
+const toolHealth = ref<ToolHealthData | null>(null);
 const loading = ref(false);
 
 async function load() {
   loading.value = true;
   try {
-    data.value = await api.get<HealthData>("/api/health");
+    const [healthData, toolHealthData] = await Promise.all([
+      api.get<HealthData>("/api/health"),
+      api.get<ToolHealthData>("/api/tool-health"),
+    ]);
+    data.value = healthData;
+    toolHealth.value = toolHealthData;
   } catch (err) {
     message.error((err as Error).message);
   } finally {
@@ -38,31 +63,56 @@ async function load() {
 onMounted(load);
 
 const overall = computed<{ tone: "success" | "warning" | "error"; label: string }>(() => {
-  if (!data.value) return { tone: "warning", label: "未知" };
+  if (!data.value) return { tone: "warning", label: "⚠️" };
   const launchdOk = data.value.launchd.loaded;
   const dirOk = Object.values(data.value.paths).some((p) => p.accessible);
   const pmOk = data.value.pm_script.exists;
   const acpOk = data.value.acp.agent.exists && data.value.acp.agent.executable;
   const score = [launchdOk, dirOk, pmOk, acpOk].filter(Boolean).length;
-  if (score === 4) return { tone: "success", label: "全部正常" };
-  if (score >= 2) return { tone: "warning", label: "部分受限" };
-  return { tone: "error", label: "需要修复" };
+  if (score === 4) return { tone: "success", label: "✅" };
+  if (score >= 2) return { tone: "warning", label: "⚠️" };
+  return { tone: "error", label: "❌" };
 });
+
+function toolStatusType(status: string) {
+  if (status === "ok") return "success";
+  if (status === "degraded") return "warning";
+  if (status === "unavailable") return "error";
+  return "default";
+}
+
+function statusIcon(ok: boolean) {
+  return ok ? "✅" : "❌";
+}
+
+function execIcon(exists: boolean, executable?: boolean) {
+  if (!exists) return "❌";
+  return executable === false ? "⚠️" : "✅";
+}
+
+function toolStatusLabel(status: string) {
+  if (status === "ok") return "✅";
+  if (status === "degraded") return "⚠️";
+  if (status === "unavailable") return "❌";
+  return "？";
+}
 </script>
 
 <template>
   <PageHeader
-    title="环境与健康"
-    :subtitle="data ? `检测于 ${data.now}` : '后台诊断'"
+    title="健康"
+    :subtitle="data ? data.now : ''"
   >
     <template #extra>
       <n-tag :type="overall.tone" :bordered="false">{{ overall.label }}</n-tag>
-      <n-button size="small" type="primary" :loading="loading" @click="load">重新检测</n-button>
+      <n-button size="small" type="primary" :loading="loading" title="重新检测" @click="load">
+        <template #icon>↻</template>
+      </n-button>
     </template>
   </PageHeader>
 
   <template v-if="data">
-    <SectionCard title="运行时配置" subtitle="环境变量 / 命令行参数解析后的值">
+    <SectionCard title="运行">
       <div class="grid">
         <div class="stat">
           <span>host</span>
@@ -77,61 +127,76 @@ const overall = computed<{ tone: "success" | "warning" | "error"; label: string 
           <b>{{ data.runtime_config.dispatch_timeout_seconds }}s</b>
         </div>
         <div class="stat">
-          <span>当前公司目录</span>
+          <span>📁</span>
           <b>{{ data.company_dir_in_use }}</b>
-          <code>来源：{{ data.company_source }}</code>
+          <code>{{ data.company_source }}</code>
         </div>
       </div>
     </SectionCard>
 
-    <SectionCard title="目录可达性" subtitle="一人公司项目根目录三级回退">
+    <SectionCard title="目录">
       <div class="grid">
         <div v-for="(p, key) in data.paths" :key="key" class="stat">
           <span>{{ key }}</span>
-          <b :class="p.accessible ? 'ok' : 'fail'">{{ p.accessible ? "可访问" : "不可访问" }}</b>
+          <b :class="p.accessible ? 'ok' : 'fail'">{{ statusIcon(p.accessible) }}</b>
           <code>{{ p.path }}</code>
         </div>
       </div>
     </SectionCard>
 
-    <SectionCard title="脚本与服务">
+    <SectionCard title="Obsidian">
       <div class="grid">
         <div class="stat">
-          <span>pm 脚本</span>
-          <b :class="data.pm_script.exists ? 'ok' : 'fail'">{{ data.pm_script.exists ? "存在" : "缺失" }}</b>
+          <span>📓</span>
+          <b>{{ data.obsidian.knowledge_base_path }}</b>
+          <code>knowledge-base</code>
+        </div>
+        <div class="stat">
+          <span>→</span>
+          <b>{{ data.obsidian.inbox_path }}</b>
+          <code>inbox</code>
+        </div>
+      </div>
+    </SectionCard>
+
+    <SectionCard title="脚本">
+      <div class="grid">
+        <div class="stat">
+          <span>🛠 pm</span>
+          <b :class="data.pm_script.exists ? 'ok' : 'fail'">{{ statusIcon(data.pm_script.exists) }}</b>
           <code>{{ data.pm_script.path }}</code>
         </div>
         <div class="stat">
           <span>acp-agent</span>
           <b :class="data.acp.agent.exists ? 'ok' : 'fail'">
-            {{ data.acp.agent.exists ? (data.acp.agent.executable ? "可执行" : "存在但非可执行") : "缺失" }}
+            {{ execIcon(data.acp.agent.exists, data.acp.agent.executable) }}
           </b>
           <code>{{ data.acp.agent.path }}</code>
         </div>
         <div class="stat">
           <span>acp-all-status</span>
           <b :class="data.acp.status.exists ? 'ok' : 'fail'">
-            {{ data.acp.status.exists ? (data.acp.status.executable ? "可执行" : "存在但非可执行") : "缺失" }}
+            {{ execIcon(data.acp.status.exists, data.acp.status.executable) }}
           </b>
           <code>{{ data.acp.status.path }}</code>
         </div>
         <div class="stat">
           <span>launchd</span>
           <b :class="data.launchd.loaded ? 'ok' : 'fail'">
-            {{ data.launchd.loaded ? `已加载（PID ${data.launchd.pid ?? "-"}）` : "未加载" }}
+            {{ data.launchd.loaded ? `✅ ${data.launchd.pid ?? "-"}` : "❌" }}
           </b>
           <code>{{ data.launchd.label }}</code>
         </div>
       </div>
     </SectionCard>
 
-    <SectionCard title="工具命令解析" subtitle="resolve_tool_command 探测结果">
+    <SectionCard title="命令">
       <table class="report-table">
         <thead>
           <tr>
             <th>工具</th>
-            <th>可用</th>
-            <th>命令路径</th>
+            <th>态</th>
+            <th>路径</th>
           </tr>
         </thead>
         <tbody>
@@ -139,7 +204,7 @@ const overall = computed<{ tone: "success" | "warning" | "error"; label: string 
             <td><b>{{ name }}</b></td>
             <td>
               <n-tag size="small" :type="t.available ? 'success' : 'default'" :bordered="false">
-                {{ t.available ? "可用" : "未发现" }}
+                {{ statusIcon(t.available) }}
               </n-tag>
             </td>
             <td><code>{{ t.command ?? "-" }}</code></td>
@@ -148,7 +213,40 @@ const overall = computed<{ tone: "success" | "warning" | "error"; label: string 
       </table>
     </SectionCard>
 
-    <SectionCard title="当前设置" subtitle="data/settings.json + 默认值">
+    <SectionCard
+      title="工具"
+      :subtitle="toolHealth ? `${toolHealth.count} · ${toolHealth.degraded_count}` : ''"
+    >
+      <div v-if="!toolHealth" class="empty"><n-spin size="small" /></div>
+      <table v-else class="report-table">
+        <thead>
+          <tr>
+            <th>工具</th>
+            <th>态</th>
+            <th>OK</th>
+            <th>Fail</th>
+            <th>Err</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="tool in toolHealth.tools" :key="tool.tool">
+            <td><b>{{ tool.tool }}</b></td>
+            <td>
+              <n-tag size="small" :type="toolStatusType(tool.status)" :bordered="false">
+                {{ toolStatusLabel(tool.status) }}
+              </n-tag>
+            </td>
+            <td><code>{{ tool.last_ok_at ?? "-" }}</code></td>
+            <td>
+              <b :class="tool.fail_count > 0 ? 'fail' : 'ok'">{{ tool.fail_count }}</b>
+            </td>
+            <td><code>{{ tool.last_error ?? "-" }}</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </SectionCard>
+
+    <SectionCard title="设置">
       <pre class="settings-json">{{ JSON.stringify(data.settings, null, 2) }}</pre>
     </SectionCard>
   </template>
@@ -157,14 +255,14 @@ const overall = computed<{ tone: "success" | "warning" | "error"; label: string 
 <style scoped>
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
 }
 .stat {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
+  gap: 3px;
+  padding: 8px 10px;
   background: #f8fafc;
   border-radius: 8px;
 }
@@ -194,19 +292,24 @@ const overall = computed<{ tone: "success" | "warning" | "error"; label: string 
 }
 .report-table th {
   text-align: left;
-  padding: 6px 8px;
+  padding: 5px 8px;
   font-weight: 600;
   color: #475569;
   background: #f8fafc;
 }
 .report-table td {
-  padding: 8px;
+  padding: 6px 8px;
   border-bottom: 1px solid #f1f5f9;
 }
 .report-table code {
   font-size: 11px;
   color: #475569;
   word-break: break-all;
+}
+.empty {
+  padding: 16px 0;
+  color: #64748b;
+  font-size: 13px;
 }
 .settings-json {
   margin: 0;

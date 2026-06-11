@@ -416,11 +416,112 @@ def list_transactions(filters: dict[str, str] | None = None) -> list[dict[str, A
     return [row_to_transaction(r) for r in rows]
 
 
+def get_transactions_by_project(project: str) -> list[dict[str, Any]]:
+    """Return all transactions linked to a project name."""
+    project_name = str(project or "").strip()
+    if not project_name:
+        return []
+    with closing(db_conn()) as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM finance_transactions
+            WHERE project = ?
+            ORDER BY occurred_on DESC, id DESC
+            """,
+            (project_name,),
+        ).fetchall()
+    return [row_to_transaction(r) for r in rows]
+
+
 def delete_transaction(tid: int) -> bool:
     with closing(db_conn()) as conn:
         cur = conn.execute("DELETE FROM finance_transactions WHERE id = ?", (tid,))
         conn.commit()
         return cur.rowcount > 0
+
+
+def update_transaction(tid: int, payload: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """更新交易，只更新提供的字段"""
+    fields = {}
+    if "occurred_on" in payload:
+        d = parse_iso_date(payload["occurred_on"])
+        if not d:
+            return None, "occurred_on must be YYYY-MM-DD"
+        fields["occurred_on"] = d
+    if "amount" in payload:
+        cents = parse_money_to_cents(payload["amount"])
+        if cents is None:
+            return None, "amount must be a number"
+        fields["amount_cents"] = cents
+    if "direction" in payload:
+        d = str(payload["direction"]).strip().lower()
+        if d not in FINANCE_DIRECTIONS:
+            return None, f"direction must be one of {sorted(FINANCE_DIRECTIONS)}"
+        fields["direction"] = d
+    for key in ("category", "vendor", "note", "project", "currency"):
+        if key in payload:
+            fields[key] = str(payload[key]).strip() or None
+    if not fields:
+        return None, "no fields to update"
+    fields["updated_at"] = now_str()
+    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    values = list(fields.values()) + [tid]
+    with closing(db_conn()) as conn:
+        cur = conn.execute(f"UPDATE finance_transactions SET {set_clause} WHERE id = ?", values)
+        conn.commit()
+        if cur.rowcount == 0:
+            return None, "transaction not found"
+        row = conn.execute("SELECT * FROM finance_transactions WHERE id = ?", (tid,)).fetchone()
+        return row_to_transaction(row), None
+
+
+def category_summary(query_month: str | None = None) -> dict[str, Any]:
+    """按 category 汇总收入和支出"""
+    if not query_month or not re.fullmatch(r"\d{4}-\d{2}", query_month):
+        query_month = date.today().strftime("%Y-%m")
+    with closing(db_conn()) as conn:
+        rows = conn.execute("""
+            SELECT direction, category, SUM(amount_cents) as total_cents, COUNT(*) as count
+            FROM finance_transactions
+            WHERE substr(occurred_on, 1, 7) = ?
+            GROUP BY direction, category
+            ORDER BY total_cents DESC
+        """, (query_month,)).fetchall()
+    income = []
+    expense = []
+    for r in rows:
+        item = {"category": r["category"], "total_cents": r["total_cents"], "count": r["count"]}
+        if r["direction"] == "in":
+            income.append(item)
+        else:
+            expense.append(item)
+    return {"month": query_month, "income": income, "expense": expense}
+
+
+def monthly_trend(months: int = 6) -> dict[str, Any]:
+    """月度收支趋势"""
+    with closing(db_conn()) as conn:
+        rows = conn.execute("""
+            SELECT substr(occurred_on, 1, 7) as ym, direction, SUM(amount_cents) as total_cents
+            FROM finance_transactions
+            GROUP BY ym, direction
+            ORDER BY ym ASC
+        """).fetchall()
+    by_month: dict[str, dict[str, int]] = {}
+    for r in rows:
+        ym = r["ym"]
+        if ym not in by_month:
+            by_month[ym] = {"income": 0, "expense": 0}
+        key = "income" if r["direction"] == "in" else "expense"
+        by_month[ym][key] += r["total_cents"]
+    all_months = sorted(by_month.keys())[-months:]
+    return {
+        "months": all_months,
+        "income": [by_month[m]["income"] for m in all_months],
+        "expense": [by_month[m]["expense"] for m in all_months],
+        "net": [by_month[m]["income"] - by_month[m]["expense"] for m in all_months],
+    }
 
 
 def insert_subscription(payload: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:

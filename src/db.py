@@ -26,6 +26,38 @@ def init_db() -> None:
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS projects (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                client_name TEXT DEFAULT '',
+                budget_cents INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'active',
+                description TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+            """
+        )
+        ensure_column(conn, "projects", "client_name", "client_name TEXT DEFAULT ''")
+        ensure_column(conn, "projects", "budget_cents", "budget_cents INTEGER DEFAULT 0")
+        ensure_column(conn, "projects", "status", "status TEXT DEFAULT 'active'")
+        ensure_column(conn, "projects", "description", "description TEXT DEFAULT ''")
+        ensure_column(conn, "projects", "created_at", "created_at TEXT")
+        ensure_column(conn, "projects", "updated_at", "updated_at TEXT")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS clients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                contact TEXT DEFAULT '',
+                notes TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            )
+            """
+        )
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,

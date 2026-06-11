@@ -63,6 +63,158 @@ export interface DailyBrief {
   }>;
 }
 
+export interface DailyBriefV2Suggestion {
+  priority: string;
+  title: string;
+  reason: string;
+  intent: string;
+  action: { type: string; task_id?: number; intent?: string };
+}
+
+export interface DailyBriefV2 {
+  date: string;
+  generated_at: string;
+  company_dir: string;
+  company_source: string;
+  sections: {
+    project_delivery: {
+      summary: string;
+      items: Array<{
+        name: string;
+        path: string;
+        repos: number;
+        inactive_days: number | null;
+        risk: boolean;
+        recent_commits: Array<{ hash: string; relative_time: string; subject: string }>;
+      }>;
+    };
+    customers: { summary: string; items: unknown[] };
+    finance: Record<string, unknown>;
+    growth: { summary: string; items: unknown[] };
+  };
+  tasks: {
+    counts: Record<TaskStatus, number>;
+    overdue: Task[];
+    due_soon: Task[];
+    failed: Task[];
+    review: Task[];
+  };
+  memory: { available: boolean; highlights: string[]; files: Array<Record<string, unknown>> };
+  coordinator: { available: boolean; recent: Array<Record<string, unknown>>; state: Record<string, unknown> };
+  risks: Array<{ level: string; message: string }>;
+  suggestions: DailyBriefV2Suggestion[];
+  one_click_actions: Array<Record<string, unknown>>;
+}
+
+export interface RiskAlert {
+  type: string;
+  level: "high" | "warning" | string;
+  message: string;
+  project?: string;
+  path?: string;
+  days?: number;
+  last_commit_at?: string;
+  task_id?: number;
+  title?: string;
+  due_at?: string;
+  status?: string;
+  priority?: string;
+}
+
+export interface RisksResponse {
+  generated_at: string;
+  count: number;
+  risks: RiskAlert[];
+}
+
+export interface FeedAction {
+  id: string;
+  label: string;
+  kind: "execute" | "ignore" | "snooze" | string;
+  intent?: string | null;
+}
+
+export interface FeedItem {
+  id: string;
+  type: "risk" | "task" | "git" | "memory" | "coordinator" | string;
+  priority: Priority | "high" | "warning" | "medium" | "low" | string;
+  summary: string;
+  details: string;
+  timestamp: string;
+  source: string;
+  ai_suggestion: {
+    action: string;
+    tool: string;
+    reason: string;
+    one_click: string;
+  };
+  actions: FeedAction[];
+  metadata: Record<string, unknown>;
+}
+
+export interface FeedResponse {
+  generated_at: string;
+  generated_label: string;
+  db_path: string;
+  items: FeedItem[];
+  today_focus: FeedItem[];
+  metrics: {
+    projects: number;
+    tasks: number;
+    risks: number;
+    review: number;
+    unread: number;
+  };
+  sources: Record<string, { ok: boolean; error?: string }>;
+}
+
+export interface CommanderExecuteResult {
+  ok: boolean;
+  tool: string;
+  task_id: number;
+  reason: string;
+  task: Task;
+  dispatched: boolean;
+  routing_table_loaded: boolean;
+}
+
+export interface CommanderStatus {
+  generated_at: string;
+  tasks: Task[];
+  running: Task[];
+  done: Task[];
+  counts: { total: number; running: number; done: number };
+}
+
+export interface AgiCouncilStatus {
+  session: string;
+  available: boolean;
+  responded?: string[];
+  missing?: string[];
+  quorum?: number;
+  quorum_met: boolean;
+}
+
+export interface AgiForMeTask {
+  id: string;
+  intent: string;
+  context: string;
+  project: string;
+  status: string;
+  authority: "L0-L2" | "L3";
+  approval_required: boolean;
+  authority_reason: string;
+  assigned_tools: string[];
+  council_required: boolean;
+  council_session: string | null;
+  council: AgiCouncilStatus | null;
+  approval: { approved_at: string; approved_by: string; note: string } | null;
+  result: string | null;
+  learning_recorded: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BusinessTaskRef {
   id: number;
   title: string;
@@ -170,6 +322,8 @@ export interface ToolStatusEntry {
   acp_configured: boolean;
   dynamic_acp: boolean;
   source: string;
+  agent_type?: string | null;
+  meta?: Record<string, unknown>;
 }
 
 export type ToolsStatus = Record<string, ToolStatusEntry>;

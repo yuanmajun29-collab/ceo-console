@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
+import { useMessage } from "naive-ui";
 import { useRouter } from "vue-router";
+import { endpoints } from "@/api/endpoints";
+import type { DailyBriefV2, DailyBriefV2Suggestion, RiskAlert } from "@/api/types";
 import { useDashboardStore } from "@/stores/dashboard";
 import { useUiStore } from "@/stores/ui";
 import KpiCard from "@/components/KpiCard.vue";
@@ -11,6 +14,12 @@ import QuickActions from "@/components/QuickActions.vue";
 const store = useDashboardStore();
 const ui = useUiStore();
 const router = useRouter();
+const message = useMessage();
+const briefV2 = ref<DailyBriefV2 | null>(null);
+const briefLoading = ref(false);
+const executingIntent = ref("");
+const riskAlerts = ref<RiskAlert[]>([]);
+const riskLoading = ref(false);
 
 const counts = computed(() => store.summary?.counts ?? { 待分配: 0, AI执行中: 0, 待人工审查: 0, 已完成: 0 });
 const totalTasks = computed(() => store.tasks.length);
@@ -38,14 +47,69 @@ function goModule(key: string) {
   if (path) router.push(path);
 }
 
+function openRisk(risk: RiskAlert) {
+  if (risk.task_id) {
+    ui.openTask(risk.task_id);
+    return;
+  }
+  router.push("/tasks");
+}
+
 const decisionQueue = computed(() => store.operatingSystem?.decision_queue ?? []);
 const warnings = computed(() => store.brief?.warnings ?? []);
+const highRiskCount = computed(() => riskAlerts.value.filter((risk) => risk.level === "high").length);
 
 const principle = computed(
   () =>
     store.operatingSystem?.principle ??
     "CEO 只做三件事：看经营态势、说目标指令、点批准或驳回。"
 );
+
+async function loadBriefV2() {
+  briefLoading.value = true;
+  try {
+    briefV2.value = await endpoints.dailyBriefV2();
+  } catch (err) {
+    message.error((err as Error).message);
+  } finally {
+    briefLoading.value = false;
+  }
+}
+
+async function loadRisks() {
+  riskLoading.value = true;
+  try {
+    const data = await endpoints.risks();
+    riskAlerts.value = data.risks ?? [];
+  } catch (err) {
+    message.error((err as Error).message);
+  } finally {
+    riskLoading.value = false;
+  }
+}
+
+async function executeSuggestion(suggestion: DailyBriefV2Suggestion) {
+  if (suggestion.action?.type === "open_task" && suggestion.action.task_id) {
+    ui.openTask(suggestion.action.task_id);
+    return;
+  }
+  const intent = suggestion.intent || suggestion.action?.intent || suggestion.title;
+  executingIntent.value = intent;
+  try {
+    const result = await endpoints.commanderExecute({ intent, context: suggestion.reason });
+    message.success(`已派发给 ${result.tool}，任务 #${result.task_id}`);
+    router.push("/commander");
+  } catch (err) {
+    message.error((err as Error).message);
+  } finally {
+    executingIntent.value = "";
+  }
+}
+
+onMounted(() => {
+  loadBriefV2();
+  loadRisks();
+});
 </script>
 
 <template>
@@ -78,6 +142,90 @@ const principle = computed(
     <div v-if="warnings.length" class="warnings">
       <div v-for="(w, i) in warnings" :key="i" class="warning">⚠ {{ w }}</div>
     </div>
+
+    <SectionCard
+      title="风险预警"
+      :subtitle="riskAlerts.length ? `${riskAlerts.length} 项风险 · 高风险 ${highRiskCount} 项` : '项目停滞与任务超期巡检'"
+    >
+      <template #extra>
+        <n-button size="small" :loading="riskLoading" @click="loadRisks">刷新</n-button>
+      </template>
+      <div v-if="riskLoading && !riskAlerts.length" class="empty">加载中...</div>
+      <div v-else-if="riskAlerts.length" class="risk-alerts">
+        <article
+          v-for="risk in riskAlerts.slice(0, 6)"
+          :key="`${risk.type}-${risk.task_id ?? risk.project ?? risk.message}`"
+          class="risk-alert"
+          :class="{ high: risk.level === 'high' }"
+          @click="openRisk(risk)"
+        >
+          <div>
+            <n-tag size="small" :type="risk.level === 'high' ? 'error' : 'warning'" :bordered="false">
+              {{ risk.level === "high" ? "高风险" : "预警" }}
+            </n-tag>
+            <b>{{ risk.message }}</b>
+          </div>
+          <span v-if="risk.due_at">到期 {{ risk.due_at }}</span>
+          <span v-else-if="risk.last_commit_at">最后提交 {{ risk.last_commit_at }}</span>
+        </article>
+      </div>
+      <div v-else class="empty">暂无风险预警。</div>
+    </SectionCard>
+
+    <SectionCard
+      title="今日简报"
+      :subtitle="briefV2 ? `${briefV2.date} · ${briefV2.sections.project_delivery.summary}` : '增强版经营摘要'"
+    >
+      <div v-if="briefLoading && !briefV2" class="empty">加载中...</div>
+      <div v-else-if="briefV2" class="daily-brief">
+        <div class="brief-summary">
+          <div>
+            <span class="summary-label">项目交付</span>
+            <b>{{ briefV2.sections.project_delivery.summary }}</b>
+          </div>
+          <div>
+            <span class="summary-label">财务</span>
+            <b>{{ briefV2.sections.finance.current_month_net || "-" }}</b>
+          </div>
+          <div>
+            <span class="summary-label">风险</span>
+            <b>{{ briefV2.risks.length }} 项</b>
+          </div>
+          <div>
+            <span class="summary-label">共享状态</span>
+            <b>{{ briefV2.coordinator.recent.length }} 条</b>
+          </div>
+        </div>
+        <div v-if="briefV2.risks.length" class="risk-list">
+          <n-tag
+            v-for="risk in briefV2.risks.slice(0, 4)"
+            :key="risk.message"
+            size="small"
+            :type="risk.level === 'high' ? 'error' : 'warning'"
+          >
+            {{ risk.message }}
+          </n-tag>
+        </div>
+        <div class="suggestions">
+          <button
+            v-for="suggestion in briefV2.suggestions.slice(0, 4)"
+            :key="suggestion.title"
+            class="suggestion"
+            type="button"
+            :disabled="executingIntent === suggestion.intent"
+            @click="executeSuggestion(suggestion)"
+          >
+            <span class="suggestion-priority">{{ suggestion.priority }}</span>
+            <span class="suggestion-main">
+              <b>{{ suggestion.title }}</b>
+              <small>{{ suggestion.reason }}</small>
+            </span>
+            <span class="suggestion-action">{{ executingIntent === suggestion.intent ? "派发中" : "执行" }}</span>
+          </button>
+          <div v-if="!briefV2.suggestions.length" class="empty">暂无建议动作。</div>
+        </div>
+      </div>
+    </SectionCard>
 
     <QuickActions />
 
@@ -236,6 +384,126 @@ const principle = computed(
   border-left: 3px solid #f97316;
   color: #9a3412;
   font-size: 13px;
+}
+.daily-brief {
+  display: grid;
+  gap: 14px;
+}
+.brief-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.brief-summary > div {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+.summary-label {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.risk-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.risk-alerts {
+  display: grid;
+  gap: 8px;
+}
+.risk-alert {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-left: 3px solid #f97316;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+  cursor: pointer;
+}
+.risk-alert.high {
+  border-color: #fecaca;
+  border-left-color: #dc2626;
+  background: #fef2f2;
+  color: #991b1b;
+}
+.risk-alert > div {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.risk-alert b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.risk-alert span {
+  flex-shrink: 0;
+  color: #64748b;
+}
+.suggestions {
+  display: grid;
+  gap: 8px;
+}
+.suggestion {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.suggestion:hover {
+  border-color: #0b67f0;
+  background: #f8fbff;
+}
+.suggestion:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.suggestion-priority {
+  display: grid;
+  place-items: center;
+  height: 28px;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #0b67f0;
+  font-size: 12px;
+  font-weight: 700;
+}
+.suggestion-main {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.suggestion-main b,
+.suggestion-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.suggestion-main small {
+  color: #64748b;
+}
+.suggestion-action {
+  justify-self: end;
+  color: #0b67f0;
+  font-size: 12px;
+  font-weight: 700;
 }
 .grid {
   display: grid;

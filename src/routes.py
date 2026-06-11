@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from flask import jsonify, render_template, request, send_from_directory
+from flask import jsonify, render_template, request, send_from_directory, stream_with_context
 from flask import Response
 
 from .core import app
@@ -32,14 +32,60 @@ from .finance import (
     list_transactions as finance_list_transactions,
     ocr_receipt as finance_ocr_receipt,
     patch_subscription as finance_patch_subscription,
+    update_transaction as finance_update_transaction,
+    category_summary as finance_category_summary,
+    monthly_trend as finance_monthly_trend,
+)
+from .clients import (
+    create_client as clients_create_client,
+    delete_client as clients_delete_client,
+    get_client as clients_get_client,
+    list_clients as clients_list_clients,
+    update_client as clients_update_client,
+)
+
+from .auto_dispatch import auto_dispatch_task
+from .client_activities import create_activity as clients_create_activity, list_activities as clients_list_activities
+from .project_milestones import (
+    create_milestone as projects_create_milestone,
+    list_milestones as projects_list_milestones,
+    milestone_summary as projects_milestone_summary,
+    update_milestone as projects_update_milestone,
 )
 from .config import *
 from .db import db_conn, init_db
+from .commander import commander_status, create_and_dispatch_task
+from .agi_for_me import (
+    approve_task as agi_approve_task,
+    create_task as agi_create_task,
+    dispatch_task as agi_dispatch_task,
+    get_task as agi_get_task,
+    list_tasks as agi_list_tasks,
+)
+from .coordinator_writer import _write_coordinator
+from .daily_brief import generate_daily_brief
 from .dispatch import append_task_progress, dispatch_task_worker, launchd_service_status
+from .feed import build_feed
 from .projects import *
 from .tasks import *
+from .search import unified_search
 from .tools import *
 from .tools import _TOOL_STATUS_CACHE
+from .risk_monitor import get_all_risks
+from .subscription_reminders import (
+    delete_subscription_reminder,
+    list_subscription_reminders,
+    upsert_subscription_reminder,
+)
+from .tool_health import get_tool_health_status
+from .scheduler import (
+    list_crons,
+    register_all_crons,
+    remove_cron,
+    store_cron_report,
+    verify_cron_secret,
+)
+from .watcher import event_stream
 from .config import _ACP_DISCOVERY_CACHE
 
 _ACP_DISCOVERY_REFRESH_LOCK = threading.Lock()
@@ -191,7 +237,86 @@ def api_project_create():
         return jsonify({"error": name_error}), 400
     result = run_pm_command(["new", name])
     status = 200 if result.returncode == 0 else 400
+    if result.returncode == 0:
+        _write_coordinator("CEO_PROJECT_CREATED", name, f"CEO Console 创建项目 {name}")
     return jsonify({"ok": result.returncode == 0, "stdout": result.stdout, "stderr": result.stderr}), status
+
+
+@app.route("/api/projects/<name>", methods=["GET", "PATCH"])
+def api_project_detail_or_update(name: str):
+    init_db()
+    if request.method == "GET":
+        detail = get_project_detail(name)
+        if detail is None:
+            return jsonify({"error": "project not found"}), 404
+        return jsonify(detail)
+
+    data = request.get_json(force=True, silent=False) or {}
+    updated, err = update_project_metadata(name, data)
+    if err is not None:
+        return jsonify({"error": err}), 400
+    detail = get_project_detail(name) or updated
+    return jsonify(detail)
+
+
+@app.route("/api/projects/<name>/tasks", methods=["GET"])
+def api_project_tasks(name: str):
+    init_db()
+    return jsonify(get_project_tasks(name))
+
+
+@app.route("/api/projects/<name>/finance", methods=["GET"])
+def api_project_finance(name: str):
+    init_db()
+    return jsonify(get_project_finance(name))
+
+
+@app.route("/api/projects/<name>/milestones", methods=["GET"])
+def api_project_milestones(name: str):
+    return jsonify(projects_list_milestones(name))
+
+
+@app.route("/api/projects/<name>/milestones", methods=["POST"])
+def api_project_create_milestone(name: str):
+    data = request.get_json(force=True, silent=True) or {}
+    name_val = str(data.get("name", "")).strip()
+    if not name_val:
+        return jsonify({"error": "name required"}), 400
+    m = projects_create_milestone(name, name_val, data.get("due_date"))
+    return jsonify(m), 201
+
+
+@app.route("/api/projects/<name>/milestones/<int:mid>", methods=["PATCH"])
+def api_project_update_milestone(name: str, mid: int):
+    data = request.get_json(force=True, silent=True) or {}
+    status = str(data.get("status", "")).strip()
+    if status not in ("pending", "in_progress", "done"):
+        return jsonify({"error": "status must be pending/in_progress/done"}), 400
+    m = projects_update_milestone(mid, status)
+    if not m:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(m)
+
+
+@app.route("/api/projects/<name>/milestones/summary", methods=["GET"])
+def api_project_milestone_summary(name: str):
+    return jsonify(projects_milestone_summary(name))
+
+
+@app.route("/api/clients/<client_name>/activities", methods=["GET"])
+def api_client_activities(client_name: str):
+    return jsonify(clients_list_activities(client_name))
+
+
+@app.route("/api/clients/<client_name>/activities", methods=["POST"])
+def api_client_create_activity(client_name: str):
+    data = request.get_json(force=True, silent=True) or {}
+    activity_type = str(data.get("activity_type", "note")).strip()
+    content = str(data.get("content", "")).strip()
+    if not content:
+        return jsonify({"error": "content required"}), 400
+    a = clients_create_activity(client_name, activity_type, content)
+    return jsonify(a), 201
 
 
 @app.route("/api/projects/<name>/archive", methods=["POST"])
@@ -201,7 +326,43 @@ def api_project_archive(name: str):
         return jsonify({"error": name_error}), 400
     result = run_pm_command(["archive", name])
     status = 200 if result.returncode == 0 else 400
+    if result.returncode == 0:
+        _write_coordinator("CEO_PROJECT_ARCHIVED", name, f"CEO Console 归档项目 {name}")
     return jsonify({"ok": result.returncode == 0, "stdout": result.stdout, "stderr": result.stderr}), status
+
+
+@app.route("/api/clients", methods=["GET", "POST"])
+def api_clients():
+    init_db()
+    if request.method == "GET":
+        return jsonify(clients_list_clients())
+    data = request.get_json(force=True, silent=False) or {}
+    created, err = clients_create_client(data)
+    if err is not None:
+        return jsonify({"error": err}), 400
+    return jsonify(created)
+
+
+@app.route("/api/clients/<name>", methods=["GET", "PATCH", "DELETE"])
+def api_client_detail_update_delete(name: str):
+    init_db()
+    if request.method == "GET":
+        client = clients_get_client(name)
+        if client is None:
+            return jsonify({"error": "client not found"}), 404
+        return jsonify(client)
+    if request.method == "DELETE":
+        if not clients_delete_client(name):
+            return jsonify({"error": "client not found"}), 404
+        return jsonify({"ok": True})
+
+    data = request.get_json(force=True, silent=False) or {}
+    updated, err = clients_update_client(name, data)
+    if err == "client not found":
+        return jsonify({"error": err}), 404
+    if err is not None:
+        return jsonify({"error": err}), 400
+    return jsonify(updated)
 
 
 @app.route("/api/projects/<name>/unarchive", methods=["POST"])
@@ -257,6 +418,11 @@ def api_repository_action():
         return jsonify({"error": error}), 400
     status, body = run_repository_action(repo_path, str(data.get("action", "")), data)
     return jsonify(body), status
+
+
+@app.route("/api/search", methods=["GET"])
+def api_search():
+    return jsonify(unified_search(str(request.args.get("q", "")).strip()))
 
 
 def build_operations_report() -> dict[str, Any]:
@@ -786,7 +952,13 @@ def api_create_task():
         )
         conn.commit()
         row = conn.execute("SELECT * FROM tasks WHERE id = ?", (cur.lastrowid,)).fetchone()
-    return jsonify(row_to_task(row)), 201
+    task = row_to_task(row)
+    _write_coordinator(
+        "CEO_TASK_CREATED",
+        f"#{task['id']} {task['title']}",
+        f"CEO Console 创建任务：{task['project']} / {task['title']}",
+    )
+    return jsonify(task), 201
 
 
 @app.route("/api/tasks/<int:task_id>", methods=["GET", "PATCH"])
@@ -892,6 +1064,7 @@ def api_bulk_update_tasks():
 
 
 @app.route("/api/tasks/<int:task_id>/review", methods=["POST"])
+@app.route("/api/review/<int:task_id>", methods=["POST"])
 def api_review_task(task_id: int):
     init_db()
     data = request.get_json(force=True, silent=False) or {}
@@ -927,7 +1100,13 @@ def api_review_task(task_id: int):
     append_task_progress(task_id, progress_msg)
     with closing(db_conn()) as conn:
         updated = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-    return jsonify(row_to_task(updated))
+    task = row_to_task(updated)
+    _write_coordinator(
+        "CEO_TASK_REVIEWED",
+        f"#{task_id} {review_result}",
+        f"CEO Console 人工审查{('通过' if decision == 'approve' else '驳回')}：{task['title']}",
+    )
+    return jsonify(task)
 
 
 @app.route("/api/tool-routing-rules")
@@ -974,6 +1153,7 @@ def api_dispatch_task(task_id: int):
             return jsonify({"error": "task is already running"}), 400
     t = threading.Thread(target=dispatch_task_worker, args=(task_id,), daemon=True)
     t.start()
+    _write_coordinator("CEO_TASK_DISPATCHED", f"#{task_id}", f"CEO Console 派发任务 #{task_id}")
     return jsonify({"ok": True, "task_id": task_id, "message": "dispatch started"})
 
 
@@ -1282,6 +1462,171 @@ def api_daily_brief():
     )
 
 
+@app.route("/api/daily-brief/v2")
+def api_daily_brief_v2():
+    return jsonify(generate_daily_brief())
+
+
+@app.route("/api/feed")
+def api_feed():
+    return jsonify(build_feed())
+
+
+@app.route("/api/subscription-reminders", methods=["GET"])
+def api_subscription_reminders():
+    return jsonify(list_subscription_reminders())
+
+
+@app.route("/api/subscription-reminders", methods=["POST"])
+def api_subscription_reminder_upsert():
+    data = request.get_json(force=True, silent=False) or {}
+    try:
+        reminder = upsert_subscription_reminder(data)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except KeyError as exc:
+        return jsonify({"error": str(exc)}), 404
+    return jsonify(reminder), 200 if data.get("id") else 201
+
+
+@app.route("/api/subscription-reminders/<int:reminder_id>", methods=["DELETE"])
+def api_subscription_reminder_delete(reminder_id: int):
+    if not delete_subscription_reminder(reminder_id):
+        return jsonify({"error": "subscription reminder not found"}), 404
+    return jsonify({"ok": True, "id": reminder_id})
+
+
+@app.route("/api/commander/execute", methods=["POST"])
+def api_commander_execute():
+    data = request.get_json(force=True, silent=False) or {}
+    intent = str(data.get("intent", "")).strip()
+    context = str(data.get("context", "")).strip()
+    if not intent:
+        return jsonify({"error": "intent is required"}), 400
+    try:
+        return jsonify(create_and_dispatch_task(intent, context))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/commander/status", methods=["GET"])
+def api_commander_status():
+    return jsonify(commander_status())
+
+
+@app.route("/api/agi-for-me/tasks", methods=["GET", "POST"])
+def api_agi_for_me_tasks():
+    if request.method == "GET":
+        return jsonify({"tasks": agi_list_tasks()})
+    data = request.get_json(force=True, silent=True) or {}
+    intent = str(data.get("intent", "")).strip()
+    if not intent:
+        return jsonify({"error": "intent required"}), 400
+    try:
+        task = agi_create_task(
+            intent,
+            str(data.get("context", "")).strip(),
+            str(data.get("project", "")).strip(),
+        )
+    except (FileNotFoundError, RuntimeError) as exc:
+        return jsonify({"error": str(exc)}), 503
+    return jsonify(task), 201
+
+
+@app.route("/api/agi-for-me/tasks/<task_id>", methods=["GET"])
+def api_agi_for_me_task(task_id: str):
+    try:
+        return jsonify(agi_get_task(task_id))
+    except FileNotFoundError:
+        return jsonify({"error": "task not found"}), 404
+
+
+@app.route("/api/agi-for-me/tasks/<task_id>/dispatch", methods=["POST"])
+def api_agi_for_me_dispatch(task_id: str):
+    try:
+        return jsonify(agi_dispatch_task(task_id))
+    except (FileNotFoundError, RuntimeError) as exc:
+        return jsonify({"error": str(exc)}), 409
+
+
+@app.route("/api/agi-for-me/tasks/<task_id>/approve", methods=["POST"])
+def api_agi_for_me_approve(task_id: str):
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        return jsonify(agi_approve_task(task_id, str(data.get("note", "")).strip()))
+    except (FileNotFoundError, RuntimeError) as exc:
+        return jsonify({"error": str(exc)}), 409
+
+
+@app.route("/api/cron/register", methods=["POST"])
+def api_cron_register():
+    return jsonify(register_all_crons())
+
+
+@app.route("/api/cron/list", methods=["GET"])
+def api_cron_list():
+    return jsonify(list_crons())
+
+
+@app.route("/api/cron/remove", methods=["POST"])
+def api_cron_remove():
+    data = request.get_json(force=True, silent=True) or {}
+    name = str(data.get("name", "")).strip()
+    result = remove_cron(name)
+    return jsonify(result), 200 if result.get("ok") else 400
+
+
+def _cron_payload() -> dict[str, Any]:
+    data = request.get_json(force=True, silent=True)
+    if isinstance(data, dict):
+        return data
+    return dict(request.form)
+
+
+@app.route("/api/cron/daily-brief", methods=["POST"])
+def api_cron_daily_brief():
+    payload = _cron_payload()
+    if not verify_cron_secret(request.headers, payload, request.args):
+        return jsonify({"error": "invalid cron secret"}), 401
+    brief = generate_daily_brief()
+    record = store_cron_report("daily-brief", f"每日简报 {brief.get('date', '')}", {"callback": payload, "brief": brief})
+    return jsonify({"ok": True, "record": record, "brief": brief})
+
+
+@app.route("/api/cron/risk-scan", methods=["POST"])
+def api_cron_risk_scan():
+    payload = _cron_payload()
+    if not verify_cron_secret(request.headers, payload, request.args):
+        return jsonify({"error": "invalid cron secret"}), 401
+    risks = get_all_risks()
+    body = {"generated_at": datetime.now().isoformat(timespec="seconds"), "count": len(risks), "risks": risks}
+    record = store_cron_report("risk-scan", f"风险扫描 {body['generated_at']}", {"callback": payload, "result": body})
+    return jsonify({"ok": True, "record": record, **body})
+
+
+@app.route("/api/cron/weekly", methods=["POST"])
+def api_cron_weekly():
+    payload = _cron_payload()
+    if not verify_cron_secret(request.headers, payload, request.args):
+        return jsonify({"error": "invalid cron secret"}), 401
+    brief = generate_daily_brief()
+    risks = get_all_risks()
+    init_db()
+    with closing(db_conn()) as conn:
+        counts = get_task_counts(conn)
+        review = [row_to_task(r) for r in fetch_tasks(conn, {"status": "待人工审查", "order_by": "priority"})[:10]]
+    report = {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "summary": "本周报告由 CEO Console cron 自动生成。",
+        "task_counts": counts,
+        "risks": risks,
+        "review_queue": review,
+        "daily_brief": brief,
+    }
+    record = store_cron_report("weekly", f"周报 {datetime.now().strftime('%Y-%m-%d')}", {"callback": payload, "report": report})
+    return jsonify({"ok": True, "record": record, "report": report})
+
+
 @app.route("/api/decision-logs", methods=["GET", "POST"])
 def api_decision_logs():
     init_db()
@@ -1403,6 +1748,19 @@ def api_health():
                 "safe_company": {"path": str(SAFE_COMPANY_DIR), "accessible": safe_access},
                 "desktop_company": {"path": str(DESKTOP_COMPANY_DIR), "accessible": desktop_access},
                 "legacy_company": {"path": str(LEGACY_COMPANY_DIR), "accessible": legacy_access},
+                "knowledge_base": {
+                    "path": str(APP_DIR / "knowledge-base"),
+                    "accessible": (APP_DIR / "knowledge-base").exists(),
+                },
+                "obsidian_inbox": {
+                    "path": str(Path.home() / "Desktop" / "obsidian-inbox"),
+                    "accessible": (Path.home() / "Desktop").exists(),
+                },
+            },
+            "obsidian": {
+                "knowledge_base_path": str(APP_DIR / "knowledge-base"),
+                "inbox_path": str(Path.home() / "Desktop" / "obsidian-inbox"),
+                "hint": "要读取 Obsidian 内容，请在 Obsidian 中打开 vault，知识自动同步到 Hermes Memory",
             },
             "pm_script": {"path": str(PM_SCRIPT), "exists": pm_exists},
             "acp": get_acp_scripts(),
@@ -1414,6 +1772,43 @@ def api_health():
             },
             "settings": load_settings(),
             "tools": tools,
+        }
+    )
+
+
+@app.route("/api/tool-health")
+def api_tool_health():
+    """返回工具健康状态（从 SQLite 读取缓存，不触发实时检测）"""
+    tools = get_tool_health_status()
+    return jsonify(
+        {
+            "generated_at": now_str(),
+            "count": len(tools),
+            "tools": tools,
+        }
+    )
+
+
+@app.route("/api/events")
+def api_events():
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@app.route("/api/risks")
+def api_risks():
+    risks = get_all_risks()
+    return jsonify(
+        {
+            "generated_at": datetime.now().isoformat(timespec="seconds"),
+            "count": len(risks),
+            "risks": risks,
         }
     )
 
@@ -1492,6 +1887,30 @@ def api_finance_delete_transaction(tid: int):
     if not finance_delete_transaction(tid):
         return jsonify({"error": "transaction not found"}), 404
     return jsonify({"ok": True})
+
+
+@app.route("/api/finance/transactions/<int:tid>", methods=["PATCH"])
+def api_finance_update_transaction(tid: int):
+    init_db()
+    data = request.get_json(force=True, silent=True) or {}
+    updated, err = finance_update_transaction(tid, data)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify(updated), 200
+
+
+@app.route("/api/finance/category-summary", methods=["GET"])
+def api_finance_category_summary():
+    init_db()
+    month = request.args.get("month", "")
+    return jsonify(finance_category_summary(month or None))
+
+
+@app.route("/api/finance/monthly-trend", methods=["GET"])
+def api_finance_monthly_trend():
+    init_db()
+    months = int(request.args.get("months", "6"))
+    return jsonify(finance_monthly_trend(months))
 
 
 @app.route("/api/finance/transactions/import-csv", methods=["POST"])
@@ -1578,3 +1997,204 @@ def api_finance_receipt_file(name: str):
 @app.route("/api/finance/ocr/status", methods=["GET"])
 def api_finance_ocr_status():
     return jsonify({"configured": finance_is_ocr_configured()})
+
+
+def _read_text_if_exists(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8") if path.exists() else ""
+    except OSError:
+        return ""
+
+
+def _frontmatter_fields(text: str) -> dict[str, str]:
+    if not text.startswith("---"):
+        return {}
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return {}
+    fields: dict[str, str] = {}
+    for line in parts[1].splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        fields[key.strip()] = value.strip().strip("\"'")
+    return fields
+
+
+def _hub_memory_data() -> dict[str, str]:
+    mem = Path.home() / ".hermes" / "memories" / "MEMORY.md"
+    user = Path.home() / ".hermes" / "memories" / "USER.md"
+    return {
+        "memory": _read_text_if_exists(mem),
+        "user": _read_text_if_exists(user),
+        "memory_mtime": datetime.fromtimestamp(mem.stat().st_mtime).isoformat() if mem.exists() else "",
+    }
+
+
+@app.route("/api/hub/memory", methods=["GET"])
+def api_hub_memory():
+    """Hermes 最新记忆快照"""
+    return jsonify(_hub_memory_data())
+
+
+def _hub_skills_data() -> list[dict[str, str]]:
+    skills_root = Path.home() / ".hermes" / "skills"
+    skills: list[dict[str, str]] = []
+    if skills_root.exists():
+        for skill_file in sorted(skills_root.rglob("SKILL.md")):
+            text = _read_text_if_exists(skill_file)
+            fields = _frontmatter_fields(text)
+            rel_parts = skill_file.relative_to(skills_root).parts
+            category = rel_parts[0] if len(rel_parts) > 1 else "uncategorized"
+            skills.append(
+                {
+                    "name": fields.get("name") or skill_file.parent.name,
+                    "category": category,
+                    "description": (fields.get("description") or "").strip()[:120],
+                }
+            )
+    return skills
+
+
+@app.route("/api/hub/skills", methods=["GET"])
+def api_hub_skills():
+    return jsonify({"skills": _hub_skills_data()})
+
+
+def _hub_agents_data() -> list[dict[str, str]]:
+    agents_root = Path.home() / ".claude" / "agents"
+    agents: list[dict[str, str]] = []
+    if agents_root.exists():
+        for agent_file in sorted(agents_root.glob("*.md")):
+            text = _read_text_if_exists(agent_file)
+            fields = _frontmatter_fields(text)
+            agents.append(
+                {
+                    "name": agent_file.stem,
+                    "description": (fields.get("description") or "").strip(),
+                }
+            )
+    return agents
+
+
+@app.route("/api/hub/agents", methods=["GET"])
+def api_hub_agents():
+    return jsonify({"agents": _hub_agents_data()})
+
+
+def _hub_coordinator_state() -> dict[str, Any]:
+    state_file = Path.home() / "company" / ".agent-coordinator" / "state.json"
+    state: dict[str, Any] = {}
+    try:
+        if state_file.exists():
+            parsed = json.loads(state_file.read_text(encoding="utf-8"))
+            state = parsed.get("state", parsed) if isinstance(parsed, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        state = {}
+    return state
+
+
+@app.route("/api/hub/coordinator", methods=["GET"])
+def api_hub_coordinator():
+    return jsonify({"state": _hub_coordinator_state()})
+
+
+def _hub_routing_markdown() -> str:
+    routing_file = (
+        Path.home()
+        / ".hermes"
+        / "skills"
+        / "productivity"
+        / "obsidian-shared-knowledge"
+        / "references"
+        / "cross-tool-routing.md"
+    )
+    return _read_text_if_exists(routing_file)
+
+
+@app.route("/api/hub/cross-tool-routing", methods=["GET"])
+def api_hub_cross_tool_routing():
+    return jsonify({"markdown": _hub_routing_markdown()})
+
+
+def _hub_export_markdown(tab: str) -> tuple[str | None, str | None]:
+    generated = now_str()
+    if tab == "memory":
+        data = _hub_memory_data()
+        return (
+            "memory",
+            f"# Hermes Memory\n\nGenerated: {generated}\n\n## USER.md\n\n{data['user'] or '-'}\n\n## MEMORY.md\n\n{data['memory'] or '-'}\n",
+        )
+    if tab == "skills":
+        lines = [f"# Hermes Skills\n\nGenerated: {generated}\n"]
+        for skill in _hub_skills_data():
+            lines.append(f"## {skill['name']}\n\n- Category: {skill['category']}\n- Description: {skill['description'] or '-'}\n")
+        return "skills", "\n".join(lines)
+    if tab == "agents":
+        lines = [f"# Claude Agents\n\nGenerated: {generated}\n"]
+        for agent in _hub_agents_data():
+            lines.append(f"## {agent['name']}\n\n{agent['description'] or '-'}\n")
+        return "agents", "\n".join(lines)
+    if tab in {"coordinator", "state"}:
+        state = _hub_coordinator_state()
+        return "coordinator", f"# Agent Coordinator State\n\nGenerated: {generated}\n\n```json\n{json.dumps(state, ensure_ascii=False, indent=2)}\n```\n"
+    if tab in {"routing", "cross-tool-routing"}:
+        return "routing", f"# Cross Tool Routing\n\nGenerated: {generated}\n\n{_hub_routing_markdown() or '-'}\n"
+    return None, None
+
+
+@app.route("/api/hub/export/<tab>", methods=["GET", "POST"])
+def api_hub_export(tab: str):
+    slug, markdown = _hub_export_markdown(tab)
+    if not slug or markdown is None:
+        return jsonify({"error": f"unsupported export tab: {tab}"}), 404
+    filename = f"ceo-console-{slug}-{datetime.now().strftime('%Y%m%d-%H%M%S')}.md"
+    preferred_dir = Path.home() / "Desktop" / "obsidian-inbox"
+    fallback_dir = DATA_DIR / "obsidian-inbox"
+    errors: list[str] = []
+    for out_dir in (preferred_dir, fallback_dir):
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            target = out_dir / filename
+            target.write_text(markdown, encoding="utf-8")
+            return jsonify(
+                {
+                    "ok": True,
+                    "tab": slug,
+                    "path": str(target),
+                    "filename": filename,
+                    "preferred_path": str(preferred_dir / filename),
+                    "fallback_used": out_dir != preferred_dir,
+                    "errors": errors,
+                }
+            )
+        except OSError as exc:
+            errors.append(f"{out_dir}: {exc}")
+    return jsonify({"ok": False, "error": "export failed", "errors": errors}), 500
+
+
+@app.route("/api/tools/launch", methods=["POST"])
+def api_tools_launch():
+    """启动指定工具"""
+    data = request.get_json(force=True, silent=True) or {}
+    tool = str(data.get("tool", "")).strip()
+    cmds = {
+        "PilotDeck": "open http://localhost:3001",
+        "Obsidian": "open 'obsidian://open?vault=Obsidian%20Vault'",
+        "Cursor": "open -a Cursor",
+        "Claude Code": "open -a Claude",
+        "Codex": "open -a Codex",
+        "Gemini": "open -a Terminal && gemini --help",
+        "Hermes": "open -a Terminal && hermes",
+        "Openclaw": "open -a Terminal && openclaw --version",
+        "Antigravity": "open ~/.antigravity",
+        "Opendesign": "open -a Terminal && opendesign",
+    }
+    cmd = cmds.get(tool)
+    if cmd:
+        try:
+            subprocess.Popen(cmd, shell=True)
+        except OSError as exc:
+            return jsonify({"ok": False, "error": f"启动失败: {exc}"}), 500
+        return jsonify({"ok": True, "message": f"启动 {tool}..."})
+    return jsonify({"ok": False, "error": f"不支持: {tool}"}), 400

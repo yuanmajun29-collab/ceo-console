@@ -14,6 +14,100 @@ from pathlib import Path
 from typing import Any
 
 from .config import *
+from .db import db_conn, init_db
+from .finance import get_transactions_by_project
+from .tasks import fetch_tasks, row_to_task
+
+
+PROJECT_METADATA_FIELDS = {"client_name", "budget_cents", "status", "description"}
+PROJECT_STATUSES = {"active", "completed", "paused"}
+
+
+def row_to_project_metadata(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "client_name": row["client_name"] or "",
+        "budget_cents": int(row["budget_cents"] or 0),
+        "status": row["status"] or "active",
+        "description": row["description"] or "",
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+def get_project_metadata_map() -> dict[str, dict[str, Any]]:
+    init_db()
+    with closing(db_conn()) as conn:
+        rows = conn.execute("SELECT * FROM projects").fetchall()
+    return {row["name"]: row_to_project_metadata(row) for row in rows}
+
+
+def get_project_metadata(name: str) -> dict[str, Any] | None:
+    init_db()
+    with closing(db_conn()) as conn:
+        row = conn.execute("SELECT * FROM projects WHERE name = ?", (name,)).fetchone()
+    return row_to_project_metadata(row) if row else None
+
+
+def _coerce_budget_cents(raw: Any) -> int | None:
+    if raw is None or raw == "":
+        return 0
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def update_project_metadata(name: str, payload: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    name_error = validate_project_name(name)
+    if name_error:
+        return None, name_error
+
+    fields: dict[str, Any] = {}
+    if "client_name" in payload:
+        fields["client_name"] = str(payload.get("client_name") or "").strip()
+    if "budget_cents" in payload:
+        budget_cents = _coerce_budget_cents(payload.get("budget_cents"))
+        if budget_cents is None:
+            return None, "budget_cents must be an integer"
+        fields["budget_cents"] = budget_cents
+    elif "budget" in payload:
+        budget_cents = _coerce_budget_cents(payload.get("budget"))
+        if budget_cents is None:
+            return None, "budget must be an integer"
+        fields["budget_cents"] = budget_cents
+    if "status" in payload:
+        status = str(payload.get("status") or "").strip().lower()
+        if status not in PROJECT_STATUSES:
+            return None, f"status must be one of {sorted(PROJECT_STATUSES)}"
+        fields["status"] = status
+    if "description" in payload or "desc" in payload:
+        fields["description"] = str(payload.get("description", payload.get("desc", "")) or "").strip()
+
+    if not fields:
+        return None, "no valid fields provided"
+
+    ts = now_str()
+    init_db()
+    with closing(db_conn()) as conn:
+        conn.execute(
+            """
+            INSERT INTO projects (name, client_name, budget_cents, status, description, created_at, updated_at)
+            VALUES (?, '', 0, 'active', '', ?, ?)
+            ON CONFLICT(name) DO NOTHING
+            """,
+            (name, ts, ts),
+        )
+        fields["updated_at"] = ts
+        set_clause = ", ".join(f"{key} = ?" for key in fields)
+        conn.execute(
+            f"UPDATE projects SET {set_clause} WHERE name = ?",
+            [*fields.values(), name],
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM projects WHERE name = ?", (name,)).fetchone()
+    return row_to_project_metadata(row), None
 
 def run_pm_command(args: list[str], input_text: str | None = None) -> subprocess.CompletedProcess:
     if not PM_SCRIPT.exists():
@@ -237,12 +331,13 @@ def run_repository_action(repo_path: Path, action: str, data: dict[str, Any] | N
 def list_projects() -> list[dict]:
     projects: list[dict] = []
     company_dir, _ = resolve_company_dir()
+    metadata_by_name = get_project_metadata_map()
     if not company_dir.exists():
-        return projects
+        return list(metadata_by_name.values())
     try:
         entries = sorted(company_dir.iterdir(), key=lambda x: x.name)
     except PermissionError:
-        return projects
+        return list(metadata_by_name.values())
     for p in entries:
         if not p.is_dir() or p.name.startswith("."):
             continue
@@ -254,7 +349,11 @@ def list_projects() -> list[dict]:
             "has_coordinator": (p / ".agent-coordinator").exists(),
             "has_execution_checklist": (p / "docs" / "执行清单.md").exists(),
         }
-        projects.append(base | compute_governance_score(p))
+        projects.append(base | metadata_by_name.get(p.name, {}) | compute_governance_score(p))
+    filesystem_names = {project["name"] for project in projects}
+    for name, metadata in sorted(metadata_by_name.items()):
+        if name not in filesystem_names:
+            projects.append(metadata | {"path": str(company_dir / name), "missing_on_disk": True})
     return projects
 
 
@@ -267,3 +366,51 @@ def list_archived_projects() -> list[str]:
         return sorted([p.name for p in archive_dir.iterdir() if p.is_dir()])
     except PermissionError:
         return []
+
+
+def get_project_tasks(name: str) -> list[dict]:
+    init_db()
+    with closing(db_conn()) as conn:
+        rows = fetch_tasks(conn, {"project": name, "order_by": "updated_at"})
+    return [row_to_task(row) for row in rows]
+
+
+def get_project_finance(name: str) -> dict:
+    transactions = get_transactions_by_project(name)
+    income_cents = sum(t["amount_cents"] for t in transactions if t["direction"] == "in")
+    expense_cents = sum(t["amount_cents"] for t in transactions if t["direction"] == "out")
+    return {
+        "income_cents": income_cents,
+        "expense_cents": expense_cents,
+        "net_cents": income_cents - expense_cents,
+        "transactions": transactions,
+    }
+
+
+def get_project_detail(name: str) -> dict | None:
+    metadata = get_project_metadata(name)
+    project = next((p for p in list_projects() if p["name"] == name), None)
+    if project is None and metadata is None:
+        return None
+    detail = project or metadata or {"name": name}
+    tasks = get_project_tasks(name)
+    finance = get_project_finance(name)
+    repositories = find_project_repositories(detail) if detail.get("path") else []
+    last_commit_at = None
+    for repo in repositories:
+        candidate = repo.get("last_commit_at")
+        if candidate and (last_commit_at is None or candidate > last_commit_at):
+            last_commit_at = candidate
+    return {
+        **detail,
+        "tasks": tasks,
+        "task_count": len(tasks),
+        "finance": finance,
+        "repositories": repositories,
+        "git": {
+            "repositories": repositories,
+            "repo_count": len(repositories),
+            "dirty_count": sum(1 for repo in repositories if repo.get("dirty")),
+            "last_commit_at": last_commit_at,
+        },
+    }

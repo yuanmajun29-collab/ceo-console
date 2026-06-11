@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import json
 import re
+import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -84,6 +86,8 @@ ACP_TOOL_TARGET = {
     "Codex": "codex",
     "Gemini": "gemini",
     "DeepSeek V4-Pro": "deepseek-v4-pro",
+    "PilotDeck": "pilotdeck",
+    "Obsidian": "obsidian",
 }
 CORE_AI_TOOLS = tuple(ACP_TOOL_TARGET.keys())
 ACP_AGENT_NAME_ALIASES = {
@@ -101,6 +105,8 @@ ACP_AGENT_NAME_ALIASES = {
     "DeepSeek V4-Pro": "DeepSeek V4-Pro",
     "Deepseek V4 Pro": "DeepSeek V4-Pro",
     "deepspeek-v4-pro": "DeepSeek V4-Pro",
+    "PilotDeck": "PilotDeck",
+    "Obsidian": "Obsidian",
 }
 ACP_NON_AGENT_NAMES = {"coordinator", "项目目录", "INFO", "WARN", "ERROR"}
 _ACP_DISCOVERY_CACHE: dict[str, Any] = {"tools": {}, "stdout": "", "ts": None, "ts_epoch": None, "company_dir": None}
@@ -292,15 +298,43 @@ def normalize_acp_agent_name(raw_name: str) -> str:
     return ACP_AGENT_NAME_ALIASES.get(name, name)
 
 
-def _agent_entry(name: str, target: str | None = None, configured: bool = False, source: str = "fixed") -> dict[str, Any]:
+def _port_open(port: int) -> bool:
+    try:
+        r = subprocess.run(
+            ["lsof", "-nP", "-iTCP", str(port), "-sTCP:LISTEN"],
+            capture_output=True,
+            timeout=5,
+        )
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _agent_entry(
+    name: str,
+    target: str | None = None,
+    configured: bool = False,
+    source: str = "fixed",
+    *,
+    runnable: bool | None = None,
+    agent_type: str | None = None,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     canonical = normalize_acp_agent_name(name)
-    return {
+    entry = {
         "name": canonical,
         "target": ACP_TOOL_TARGET.get(canonical) or target or slugify_acp_target(canonical),
         "configured": bool(configured),
         "builtin": canonical in ACP_TOOL_TARGET,
         "source": source,
     }
+    if runnable is not None:
+        entry["runnable"] = bool(runnable)
+    if agent_type:
+        entry["agent_type"] = agent_type
+    if meta is not None:
+        entry["meta"] = meta
+    return entry
 
 
 def display_name_from_acp_target(target: str) -> str:
@@ -316,6 +350,8 @@ def display_name_from_acp_target(target: str) -> str:
         "deepseek": "DeepSeek V4-Pro",
         "deepseek-v4": "DeepSeek V4-Pro",
         "deepseek-v4-pro": "DeepSeek V4-Pro",
+        "pilotdeck": "PilotDeck",
+        "obsidian": "Obsidian",
     }
     value = target.strip().lower()
     if value in alias:
@@ -347,6 +383,30 @@ def discover_local_acp_agents() -> dict[str, dict[str, Any]]:
             pass
     if hermes_configured:
         agents["Hermes"] = _agent_entry("Hermes", "hermes", True, "hermes_config")
+
+    pilotdeck_bin = shutil.which("pilotdeck") or (Path.home() / ".pilotdeck" / "app" / "bin" / "pilotdeck")
+    pilotdeck_running = _port_open(3001)
+    pilotdeck_path = Path(pilotdeck_bin) if pilotdeck_bin else None
+    agents["PilotDeck"] = _agent_entry(
+        "PilotDeck",
+        str(pilotdeck_path) if pilotdeck_path and pilotdeck_path.exists() else "pilotdeck",
+        bool((pilotdeck_path and pilotdeck_path.exists()) or pilotdeck_running),
+        "local_probe",
+        runnable=bool(pilotdeck_path and pilotdeck_path.exists()) or pilotdeck_running,
+        agent_type="web",
+        meta={"port": 3001, "url": "http://localhost:3001"},
+    )
+
+    obsidian_vault = Path.home() / "Documents" / "Obsidian Vault"
+    agents["Obsidian"] = _agent_entry(
+        "Obsidian",
+        "obsidian://open?vault=Obsidian%20Vault",
+        obsidian_vault.exists(),
+        "local_probe",
+        runnable=obsidian_vault.exists(),
+        agent_type="desktop",
+        meta={"url_scheme": "obsidian://open?vault=Obsidian%20Vault"},
+    )
     return agents
 
 

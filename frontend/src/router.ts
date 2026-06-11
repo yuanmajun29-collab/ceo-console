@@ -9,8 +9,20 @@ const routes: RouteRecordRaw[] = [
       {
         path: "",
         name: "home",
+        component: () => import("@/views/CockpitFeed.vue"),
+        meta: { title: "信息流", group: "home" },
+      },
+      {
+        path: "cockpit-old",
+        name: "cockpit-old",
         component: () => import("@/views/CockpitHome.vue"),
-        meta: { title: "CEO 驾驶舱", group: "home" },
+        meta: { title: "旧版驾驶舱", group: "home" },
+      },
+      {
+        path: "biz",
+        name: "biz",
+        component: () => import("@/views/biz/BusinessOverview.vue"),
+        meta: { title: "经营总览", group: "biz" },
       },
       {
         path: "biz/project",
@@ -43,6 +55,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "任务中心", group: "ops" },
       },
       {
+        path: "commander",
+        name: "commander",
+        component: () => import("@/views/AICommander.vue"),
+        meta: { title: "AI Commander", group: "ops" },
+      },
+      {
         path: "review",
         name: "review",
         component: () => import("@/views/ops/ReviewCenter.vue"),
@@ -59,6 +77,12 @@ const routes: RouteRecordRaw[] = [
         name: "tools",
         component: () => import("@/views/ops/ToolsAndAcp.vue"),
         meta: { title: "AI 工具与 ACP", group: "ops" },
+      },
+      {
+        path: "tools/hub",
+        name: "tools-hub",
+        component: () => import("@/views/KnowledgeHub.vue"),
+        meta: { title: "知识中心", group: "ops" },
       },
       {
         path: "repos",
@@ -83,6 +107,12 @@ const routes: RouteRecordRaw[] = [
         name: "health",
         component: () => import("@/views/ops/Health.vue"),
         meta: { title: "环境与健康", group: "ops" },
+      },
+      {
+        path: "help",
+        name: "help",
+        component: () => import("@/views/Help.vue"),
+        meta: { title: "使用说明", group: "system" },
       },
       {
         path: "settings",

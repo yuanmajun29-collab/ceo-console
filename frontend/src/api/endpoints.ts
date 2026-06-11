@@ -1,13 +1,19 @@
 import { api } from "./client";
 import type {
   CompanyOperatingSystem,
+  CommanderExecuteResult,
+  CommanderStatus,
+  AgiForMeTask,
   DailyBrief,
+  DailyBriefV2,
   DashboardSummary,
   DecisionLog,
   FinanceOverview,
   FinanceSubscription,
   FinanceTransaction,
+  FeedResponse,
   ProjectRow,
+  RisksResponse,
   Task,
   ToolsStatus,
 } from "./types";
@@ -16,6 +22,18 @@ export const endpoints = {
   dashboardSummary: () =>
     api.get<DashboardSummary>("/api/dashboard-summary"),
   dailyBrief: () => api.get<DailyBrief>("/api/daily-brief"),
+  dailyBriefV2: () => api.get<DailyBriefV2>("/api/daily-brief/v2"),
+  feed: () => api.get<FeedResponse>("/api/feed"),
+  commanderExecute: (body: { intent: string; context?: string }) =>
+    api.post<CommanderExecuteResult>("/api/commander/execute", body),
+  commanderStatus: () => api.get<CommanderStatus>("/api/commander/status"),
+  agiTasks: () => api.get<{ tasks: AgiForMeTask[] }>("/api/agi-for-me/tasks"),
+  createAgiTask: (body: { intent: string; context?: string; project?: string }) =>
+    api.post<AgiForMeTask>("/api/agi-for-me/tasks", body),
+  dispatchAgiTask: (id: string) =>
+    api.post<AgiForMeTask>(`/api/agi-for-me/tasks/${id}/dispatch`, {}),
+  approveAgiTask: (id: string, note = "") =>
+    api.post<AgiForMeTask>(`/api/agi-for-me/tasks/${id}/approve`, { note }),
   companyOperatingSystem: () =>
     api.get<CompanyOperatingSystem>("/api/company-operating-system"),
   tasks: (query?: Record<string, string | undefined>) => {
@@ -89,6 +107,7 @@ export const endpoints = {
       warning: string | null;
     }>("/api/projects"),
   health: () => api.get<Record<string, unknown>>("/api/health"),
+  risks: () => api.get<RisksResponse>("/api/risks"),
   financeOverview: () => api.get<FinanceOverview>("/api/finance/overview"),
   financeTransactions: (filters?: Record<string, string | undefined>) => {
     const qs = new URLSearchParams();

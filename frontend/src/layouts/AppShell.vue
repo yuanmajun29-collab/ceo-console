@@ -114,7 +114,7 @@ onUnmounted(() => {
 <style scoped>
 .shell {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: max-content minmax(0, 1fr);
   min-height: 100vh;
 }
 .main {
@@ -126,5 +126,10 @@ onUnmounted(() => {
   padding: 20px 24px 40px;
   flex: 1;
   min-width: 0;
+}
+@media (max-width: 720px) {
+  .content {
+    padding: 14px 12px 28px;
+  }
 }
 </style>

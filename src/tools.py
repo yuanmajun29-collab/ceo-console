@@ -28,6 +28,8 @@ def tool_candidates(tool_name: str) -> list[str]:
         "Cursor": ["cursor", "cursor-agent"],
         "Hermes": ["hermes", "hermes-agent"],
         "DeepSeek V4-Pro": ["deepseek", "deepseek-v4-pro"],
+        "PilotDeck": ["pilotdeck"],
+        "Obsidian": ["obsidian"],
     }
     if tool_name in mapping:
         return mapping[tool_name]
@@ -46,8 +48,17 @@ def resolve_tool_command(tool_name: str) -> str | None:
         str(Path.home() / ".hermes" / "hermes-agent" / "venv" / "bin"),
         str(Path.home() / ".hermes" / "hermes-agent"),
         str(Path.home() / ".hermes" / "bin"),
+        str(Path.home() / ".pilotdeck" / "app" / "bin"),
         str(Path.home() / "Library" / "Python" / "3.9" / "bin"),
     ]
+    if tool_name == "PilotDeck":
+        pilotdeck = Path.home() / ".pilotdeck" / "app" / "bin" / "pilotdeck"
+        if pilotdeck.exists() and os.access(pilotdeck, os.X_OK):
+            return str(pilotdeck)
+    if tool_name == "Obsidian":
+        vault = Path.home() / "Documents" / "Obsidian Vault"
+        if vault.exists():
+            return "obsidian://open?vault=Obsidian%20Vault"
     for c in tool_candidates(tool_name):
         found = shutil.which(c)
         if found:
@@ -230,6 +241,12 @@ def pick_fallback_tool(preferred_tools: list[str] | None = None) -> tuple[str | 
 
 
 def check_command_runnable(path: str) -> tuple[bool, str | None]:
+    now = time.time()
+    runnable_cache = _TOOL_STATUS_CACHE.setdefault("runnable_checks", {})
+    cached = runnable_cache.get(path)
+    if cached and now - cached["ts"] < 60:
+        return cached["result"]
+
     try:
         # Quick smoke check: many CLIs support --help without side effects.
         res = subprocess.run(
@@ -241,11 +258,15 @@ def check_command_runnable(path: str) -> tuple[bool, str | None]:
             timeout=8,
         )
         if res.returncode == 0:
-            return True, None
+            result = (True, None)
+            runnable_cache[path] = {"ts": now, "result": result}
+            return result
         err = (res.stderr or res.stdout or "").strip()
-        return False, err[:400]
+        result = (False, err[:400])
     except Exception as exc:
-        return False, str(exc)
+        result = (False, str(exc))
+    runnable_cache[path] = {"ts": now, "result": result}
+    return result
 
 
 def quota_env_key(tool_name: str) -> str:
@@ -361,6 +382,8 @@ def get_tools_status_cached() -> dict[str, Any]:
         "Codex": True,
         "Gemini": True,
         "DeepSeek V4-Pro": True,
+        "PilotDeck": False,
+        "Obsidian": False,
     }
     data: dict[str, Any] = {}
     acp_scripts = get_acp_scripts()
@@ -375,10 +398,14 @@ def get_tools_status_cached() -> dict[str, Any]:
             and acp_entry.get("target")
             and (not acp_requires_config or acp_entry.get("configured"))
         )
-        available = command is not None or acp_enabled or deepseek_api_enabled
+        probe_runnable = acp_entry.get("runnable")
+        available = command is not None or acp_enabled or deepseek_api_enabled or probe_runnable is True
         runnable = False
         reason = None
-        if available and command and headless_support.get(tool, True):
+        if available and probe_runnable is not None and not headless_support.get(tool, True):
+            runnable = bool(probe_runnable)
+            reason = None if runnable else "本地探测不可用。"
+        elif available and command and headless_support.get(tool, True):
             runnable, reason = check_command_runnable(command)
         elif available and acp_enabled and headless_support.get(tool, True):
             runnable = True
@@ -401,6 +428,8 @@ def get_tools_status_cached() -> dict[str, Any]:
             "acp_configured": bool(acp_entry.get("configured") or acp_enabled),
             "dynamic_acp": not bool(acp_entry.get("builtin")),
             "source": acp_entry.get("source") or "fixed",
+            "agent_type": acp_entry.get("agent_type"),
+            "meta": acp_entry.get("meta") or {},
         }
 
     _TOOL_STATUS_CACHE["ts"] = now

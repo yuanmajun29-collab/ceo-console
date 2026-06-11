@@ -39,6 +39,7 @@ const store = useDashboardStore();
 const message = useMessage();
 const acpData = ref<AcpSummary | null>(null);
 const refreshing = ref(false);
+const launchingTool = ref<string | null>(null);
 
 async function loadAcp() {
   try {
@@ -58,6 +59,21 @@ async function refreshAll() {
     message.error((err as Error).message);
   } finally {
     refreshing.value = false;
+  }
+}
+
+async function launchTool(name: string) {
+  launchingTool.value = name;
+  try {
+    const resp = await api.post<{ ok: boolean; message?: string; error?: string }>(
+      "/api/tools/launch",
+      { tool: name }
+    );
+    message.success(resp.message ?? `启动 ${name}...`);
+  } catch (err) {
+    message.error((err as Error).message);
+  } finally {
+    launchingTool.value = null;
   }
 }
 
@@ -147,16 +163,25 @@ function statusLabel(t: ToolsStatus[string]): string {
         </div>
 
         <footer class="card-foot">
-          <a
-            v-if="t.quota?.recharge_url"
-            :href="t.quota.recharge_url"
-            target="_blank"
-            class="link"
-            rel="noreferrer noopener"
-          >
-            充值/账单 ↗
-          </a>
-          <span v-else />
+          <div class="card-actions">
+            <n-button
+              size="tiny"
+              secondary
+              :loading="launchingTool === name"
+              @click="launchTool(name)"
+            >
+              启动
+            </n-button>
+            <a
+              v-if="t.quota?.recharge_url"
+              :href="t.quota.recharge_url"
+              target="_blank"
+              class="link"
+              rel="noreferrer noopener"
+            >
+              充值/账单 ↗
+            </a>
+          </div>
           <span class="source-tag">来源 · {{ t.source }}</span>
         </footer>
       </div>
@@ -295,6 +320,12 @@ function statusLabel(t: ToolsStatus[string]): string {
   align-items: center;
   border-top: 1px solid #f1f5f9;
   padding-top: 8px;
+  gap: 10px;
+}
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .link {
   font-size: 11px;
