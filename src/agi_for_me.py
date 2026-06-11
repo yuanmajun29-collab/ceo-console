@@ -69,7 +69,7 @@ def run_command(*args: str) -> dict[str, Any]:
     if not AGI_ENTRY.is_file():
         raise FileNotFoundError(f"AGI for Me entry not found: {AGI_ENTRY}")
     result = subprocess.run(
-        [str(AGI_ENTRY), *args],
+        [str(AGI_ENTRY), "--json", *args],
         cwd=str(COMPANY_DIR),
         text=True,
         encoding="utf-8",
