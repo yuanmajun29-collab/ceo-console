@@ -30,5 +30,7 @@ data/finance/
 
 # Agent coordinator generated context
 .agent-coordinator/context-inject.txt
+.agent-coordinator/state.json
+.agent-coordinator/decisions.jsonl
 .claude/coordinator-context.txt
 CLAUDE.md
